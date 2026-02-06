@@ -1,0 +1,34 @@
+{
+  "name": "grist-access-rules-widget",
+  "version": "1.0.0",
+  "description": "Grist widget to manage document access rules (tables, columns, rows)",
+  "main": "index.html",
+  "scripts": {
+    "serve": "npx http-server -c-1 --port 8587 .",
+    "dev": "npx http-server -c-1 --port 8587 -o ."
+  },
+  "grist": {
+    "name": "Access Rules Manager",
+    "url": "https://grist-access-rules-widget.vercel.app/index.html",
+    "widgetId": "grist-access-rules-widget",
+    "published": true,
+    "accessLevel": "full",
+    "renderAfterReady": true,
+    "description": "Visual interface to manage document access rules: control read/write permissions per table, column, and row. Supports all roles (Owner, Editor, Viewer). Bilingual FR/EN.",
+    "authors": [
+      {
+        "name": "Said Hamadou"
+      }
+    ],
+    "isGristLabsMaintained": false
+  },
+  "keywords": [
+    "grist",
+    "widget",
+    "access-rules",
+    "permissions",
+    "security",
+    "acl"
+  ],
+  "license": "Apache-2.0"
+}
