@@ -313,11 +313,12 @@ function showToast(text, type, duration) {
   setTimeout(function() { toastEl.classList.remove('show'); }, duration);
 }
 
-function showModal(title, bodyHtml) {
+function showModal(title, bodyHtml, confirmText, confirmClass) {
   modalTitle.textContent = title;
   modalBody.innerHTML = bodyHtml;
   modalCancelBtn.textContent = t('modalCancel');
-  modalConfirmBtn.textContent = t('modalDelete');
+  modalConfirmBtn.textContent = confirmText || t('modalDelete');
+  modalConfirmBtn.className = 'modal-btn ' + (confirmClass || 'modal-btn-danger');
   modalOverlay.classList.add('show');
 
   return new Promise(function(resolve) {
@@ -2015,7 +2016,10 @@ async function changeUserRole(email, newRole) {
 }
 
 async function removeUser(email) {
-  if (!confirm('Retirer ' + email + ' du document ?')) return;
+  var bodyHtml = '<p style="font-size:14px; color:#334155; margin:0;">Retirer <strong>' + sanitizeForDisplay(email) + '</strong> du document ?</p>'
+    + '<p style="font-size:12px; color:#94a3b8; margin:8px 0 0 0;">Cette personne n\'aura plus accès au document.</p>';
+  var confirmed = await showModal('Retirer un utilisateur', bodyHtml, 'Retirer', 'modal-btn-danger');
+  if (!confirmed) return;
   try {
     var delta = { users: {} };
     delta.users[email] = null;
@@ -2024,7 +2028,7 @@ async function removeUser(email) {
     await loadUsers();
   } catch (e) {
     console.error('Error removing user:', e);
-    showToast('❌ Erreur : ' + e.message, 'error', 5000);
+    showToast('❌ ' + parseApiError(e.message), 'error', 5000);
   }
 }
 
