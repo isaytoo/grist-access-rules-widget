@@ -2023,9 +2023,16 @@ async function removeUser(email) {
   try {
     var delta = { users: {} };
     delta.users[email] = null;
-    await usersApiFetch('/access', 'PATCH', { delta: delta });
-    showToast('✅ ' + email + ' retiré', 'success');
+    var result = await usersApiFetch('/access', 'PATCH', { delta: delta });
+    console.log('Remove user result:', result);
+    // Reload and verify
+    var countBefore = allUsers.length;
     await loadUsers();
+    if (allUsers.length < countBefore) {
+      showToast('✅ ' + email + ' retiré', 'success');
+    } else {
+      showToast('⚠️ ' + email + ' : la suppression n\'a pas été appliquée. Vérifiez vos permissions.', 'warning', 5000);
+    }
   } catch (e) {
     console.error('Error removing user:', e);
     showToast('❌ ' + parseApiError(e.message), 'error', 5000);
