@@ -1745,7 +1745,7 @@ var userApiKey = '';
 var gristServerUrl = ''; // e.g. "https://docs.getgrist.com"
 var gristDocId = '';      // e.g. "t2q2MvbRBWE4"
 var proxyAvailable = false;
-var usersPerPage = 20;
+var usersPerPage = 10;
 var usersCurrentPage = 1;
 
 async function detectGristInfo() {
