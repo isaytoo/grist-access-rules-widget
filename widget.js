@@ -1744,6 +1744,7 @@ var usersFilterRole = 'all';
 var userApiKey = '';
 var gristServerUrl = ''; // e.g. "https://docs.getgrist.com"
 var gristDocId = '';      // e.g. "t2q2MvbRBWE4"
+var proxyAvailable = false;
 
 async function detectGristInfo() {
   var info = await getToken();
@@ -2059,11 +2060,43 @@ function setupUsersListeners() {
   }
 }
 
+// Check if the proxy endpoint is available (Vercel deployment vs static hosting)
+async function detectProxy() {
+  try {
+    var resp = await fetch(window.location.origin + '/api/proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gristUrl: '', docId: '', endpoint: '', apiKey: '' })
+    });
+    // 400 = proxy responded (missing params) → available
+    // 404 = no proxy route → not available
+    proxyAvailable = resp.status !== 404;
+  } catch (e) {
+    proxyAvailable = false;
+  }
+  console.log('Proxy available:', proxyAvailable);
+  return proxyAvailable;
+}
+
+function showUsersNoProxy() {
+  if (usersApiKeySetup) usersApiKeySetup.classList.add('hidden');
+  if (usersManagement) usersManagement.classList.add('hidden');
+  var el = document.getElementById('users-no-proxy');
+  if (el) el.classList.remove('hidden');
+}
+
 async function initUsersTab() {
   await detectGristInfo();
   setupUsersListeners();
 
-  // Check for saved API key
+  // Step 1: Check if proxy is available
+  var hasProxy = await detectProxy();
+  if (!hasProxy) {
+    showUsersNoProxy();
+    return;
+  }
+
+  // Step 2: Check for saved API key
   var key = loadUserApiKey();
   if (key) {
     try {
