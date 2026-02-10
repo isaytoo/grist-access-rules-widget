@@ -1749,20 +1749,20 @@ async function detectBaseUrl() {
   return userApiBaseUrl;
 }
 
-// Detect if Grist is self-hosted by trying a same-origin preflight
+// Detect if Grist is self-hosted by checking the baseUrl domain
 async function detectSelfHosted() {
   try {
     var info = await getToken();
-    // Try a HEAD/GET to /access with the plugin token — if CORS blocks it, we get a TypeError
-    var url = info.baseUrl + '/access?auth=' + info.token;
-    var resp = await fetch(url, { method: 'GET' });
-    // If we get here without CORS error, it's self-hosted (CORS allowed)
-    // The response might be 403 (token doesn't have access rights) but CORS passed
-    isSelfHosted = true;
-    return true;
+    var url = new URL(info.baseUrl);
+    var hostname = url.hostname.toLowerCase();
+    // Known SaaS domains
+    var saasHosts = ['docs.getgrist.com', 'getgrist.com', 'grist.anct.gouv.fr'];
+    var isSaas = saasHosts.some(function(h) { return hostname === h || hostname.endsWith('.' + h); });
+    isSelfHosted = !isSaas;
+    console.log('Grist host: ' + hostname + ' → ' + (isSelfHosted ? 'self-hosted' : 'SaaS'));
+    return isSelfHosted;
   } catch (e) {
-    // TypeError: Failed to fetch = CORS blocked = SaaS
-    console.log('CORS blocked → SaaS detected:', e.message);
+    console.error('Cannot detect Grist type:', e);
     isSelfHosted = false;
     return false;
   }
