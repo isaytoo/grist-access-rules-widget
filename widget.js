@@ -1745,6 +1745,8 @@ var userApiKey = '';
 var gristServerUrl = ''; // e.g. "https://docs.getgrist.com"
 var gristDocId = '';      // e.g. "t2q2MvbRBWE4"
 var proxyAvailable = false;
+var usersPerPage = 20;
+var usersCurrentPage = 1;
 
 async function detectGristInfo() {
   var info = await getToken();
@@ -1822,6 +1824,7 @@ function renderUsersStats() {
 
 function filterUsers(role) {
   usersFilterRole = role;
+  usersCurrentPage = 1;
   renderUsersStats();
   renderUsersList();
 }
@@ -1850,6 +1853,11 @@ function getInitials(name, email) {
   return '??';
 }
 
+function goToUsersPage(page) {
+  usersCurrentPage = page;
+  renderUsersList();
+}
+
 function renderUsersList() {
   var search = (usersSearchInput.value || '').trim().toLowerCase();
   var filtered = allUsers.filter(function(u) {
@@ -1868,8 +1876,16 @@ function renderUsersList() {
   }
 
   usersEmptyEl.classList.add('hidden');
+
+  // Pagination
+  var totalPages = Math.ceil(filtered.length / usersPerPage);
+  if (usersCurrentPage > totalPages) usersCurrentPage = totalPages;
+  if (usersCurrentPage < 1) usersCurrentPage = 1;
+  var start = (usersCurrentPage - 1) * usersPerPage;
+  var pageUsers = filtered.slice(start, start + usersPerPage);
+
   var html = '';
-  filtered.forEach(function(u) {
+  pageUsers.forEach(function(u) {
     var initials = getInitials(u.name, u.email);
     var avatarCls = getAvatarClass(u.access);
     var roleCls = getRoleSelectClass(u.access);
@@ -1893,6 +1909,24 @@ function renderUsersList() {
     html += '  </div>';
     html += '</div>';
   });
+
+  // Pagination bar (only if more than 1 page)
+  if (totalPages > 1) {
+    html += '<div style="display:flex; align-items:center; justify-content:center; gap:6px; margin-top:12px; flex-wrap:wrap;">';
+    html += '<button class="btn btn-sm btn-secondary" onclick="goToUsersPage(' + (usersCurrentPage - 1) + ')"' + (usersCurrentPage <= 1 ? ' disabled style="opacity:.4;cursor:default;padding:6px 10px;"' : ' style="padding:6px 10px;"') + '>◀</button>';
+    for (var p = 1; p <= totalPages; p++) {
+      if (p === usersCurrentPage) {
+        html += '<span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:#3b82f6;color:#fff;font-weight:700;font-size:13px;">' + p + '</span>';
+      } else if (p === 1 || p === totalPages || Math.abs(p - usersCurrentPage) <= 1) {
+        html += '<button class="btn btn-sm btn-secondary" style="width:32px;height:32px;padding:0;font-size:13px;" onclick="goToUsersPage(' + p + ')">' + p + '</button>';
+      } else if (Math.abs(p - usersCurrentPage) === 2) {
+        html += '<span style="color:#94a3b8;font-size:12px;">…</span>';
+      }
+    }
+    html += '<button class="btn btn-sm btn-secondary" onclick="goToUsersPage(' + (usersCurrentPage + 1) + ')"' + (usersCurrentPage >= totalPages ? ' disabled style="opacity:.4;cursor:default;padding:6px 10px;"' : ' style="padding:6px 10px;"') + '>▶</button>';
+    html += '<span style="font-size:12px;color:#94a3b8;margin-left:8px;">' + filtered.length + ' utilisateur' + (filtered.length > 1 ? 's' : '') + '</span>';
+    html += '</div>';
+  }
 
   usersListEl.innerHTML = html;
 }
@@ -1994,7 +2028,7 @@ function showUsersManagement() {
 
 function setupUsersListeners() {
   if (usersRefreshBtn) usersRefreshBtn.addEventListener('click', function() { loadUsers(); });
-  if (usersSearchInput) usersSearchInput.addEventListener('input', function() { renderUsersList(); });
+  if (usersSearchInput) usersSearchInput.addEventListener('input', function() { usersCurrentPage = 1; renderUsersList(); });
   if (usersAddBtn) usersAddBtn.addEventListener('click', addUser);
   if (usersAddEmail) usersAddEmail.addEventListener('keypress', function(e) {
     if (e.key === 'Enter') addUser();
