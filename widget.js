@@ -2153,12 +2153,12 @@ function setupUsersListeners() {
 }
 
 // Test if direct API calls work (CORS allowed)
+// Uses a lightweight request without API key — we only care if CORS passes, not auth
 async function detectDirectApi() {
   try {
-    // Try a direct fetch — if CORS blocks, we get a TypeError
-    var url = gristServerUrl + '/api/docs/' + gristDocId + '/access?auth=' + encodeURIComponent(userApiKey);
-    var resp = await fetch(url, { method: 'GET' });
-    // If we get here (any status), CORS passed
+    var url = gristServerUrl + '/api/';
+    var resp = await fetch(url, { method: 'GET', mode: 'cors' });
+    // If we get here (any status, even 404), CORS passed
     directApiAvailable = true;
   } catch (e) {
     // TypeError = CORS blocked
