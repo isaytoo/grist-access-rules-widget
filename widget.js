@@ -1721,18 +1721,11 @@ async function deleteAttrDataRow(rowId, tableId) {
 }
 
 // =============================================================================
-// USERS TAB — API Key + User Management via REST API
+// USERS TAB — Uses Plugin API getAccessToken (same-origin, no CORS issues)
 // =============================================================================
 
-var usersApiKeySetup = document.getElementById('users-apikey-setup');
 var usersManagement = document.getElementById('users-management');
-var usersApiKeyInput = document.getElementById('users-apikey-input');
-var usersApiKeySaveBtn = document.getElementById('users-apikey-save-btn');
-var usersApiKeyMessage = document.getElementById('users-apikey-message');
-var usersApiKeyHelpToggle = document.getElementById('users-apikey-help-toggle');
-var usersApiKeyHelp = document.getElementById('users-apikey-help');
 var usersRefreshBtn = document.getElementById('users-refresh-btn');
-var usersDisconnectBtn = document.getElementById('users-disconnect-btn');
 var usersSearchInput = document.getElementById('users-search');
 var usersAddEmail = document.getElementById('users-add-email');
 var usersAddRole = document.getElementById('users-add-role');
@@ -1742,56 +1735,27 @@ var usersLoadingEl = document.getElementById('users-loading');
 var usersEmptyEl = document.getElementById('users-empty');
 var usersStatsEl = document.getElementById('users-stats');
 
-var storedApiKey = '';
-var gristBaseUrl = '';
-var gristDocId = '';
-var allUsers = []; // [{id, email, name, access}]
+var allUsers = [];
 var usersFilterRole = 'all';
+var usersWriteTokenInfo = null;
 
-// Derive Grist base URL from the widget token
-async function detectGristUrl() {
-  try {
-    var info = await getToken();
-    // info.baseUrl is like "https://grist.example.com/api/docs/DOC_ID"
-    var parts = info.baseUrl.match(/^(https?:\/\/[^/]+)\/api\/docs\/([^/?]+)/);
-    if (parts) {
-      gristBaseUrl = parts[1];
-      gristDocId = parts[2];
-      return true;
-    }
-  } catch (e) {
-    console.error('Cannot detect Grist URL:', e);
+async function getWriteToken() {
+  if (!usersWriteTokenInfo || Date.now() > usersWriteTokenInfo.expiry) {
+    var result = await grist.docApi.getAccessToken({ readOnly: false });
+    usersWriteTokenInfo = {
+      baseUrl: result.baseUrl,
+      token: result.token,
+      expiry: Date.now() + result.ttlMsecs - 30000
+    };
   }
-  return false;
-}
-
-function getStorageKey() {
-  return 'grist_api_key_' + gristDocId;
-}
-
-function loadApiKey() {
-  try {
-    storedApiKey = localStorage.getItem(getStorageKey()) || '';
-  } catch (e) { storedApiKey = ''; }
-  return storedApiKey;
-}
-
-function saveApiKey(key) {
-  // Strip any non-ASCII, whitespace, or invisible chars
-  key = key.replace(/[^\x20-\x7E]/g, '').trim();
-  storedApiKey = key;
-  try { localStorage.setItem(getStorageKey(), key); } catch (e) {}
-}
-
-function clearApiKey() {
-  storedApiKey = '';
-  try { localStorage.removeItem(getStorageKey()); } catch (e) {}
+  return usersWriteTokenInfo;
 }
 
 async function usersApiFetch(endpoint, method, body) {
   method = method || 'GET';
+  var info = await getWriteToken();
   var sep = endpoint.indexOf('?') !== -1 ? '&' : '?';
-  var url = gristBaseUrl + '/api' + endpoint + sep + 'auth=' + encodeURIComponent(storedApiKey);
+  var url = info.baseUrl + endpoint + sep + 'auth=' + info.token;
   var opts = {
     method: method,
     headers: { 'Content-Type': 'application/json' }
@@ -1804,25 +1768,6 @@ async function usersApiFetch(endpoint, method, body) {
   }
   var text = await resp.text();
   return text ? JSON.parse(text) : {};
-}
-
-async function testApiKey() {
-  try {
-    var data = await usersApiFetch('/docs/' + gristDocId + '/access');
-    return data;
-  } catch (e) {
-    throw e;
-  }
-}
-
-function showUsersSetup() {
-  usersApiKeySetup.classList.remove('hidden');
-  usersManagement.classList.add('hidden');
-}
-
-function showUsersManagement() {
-  usersApiKeySetup.classList.add('hidden');
-  usersManagement.classList.remove('hidden');
 }
 
 function renderUsersStats() {
@@ -1926,7 +1871,7 @@ async function loadUsers() {
   usersEmptyEl.classList.add('hidden');
 
   try {
-    var data = await usersApiFetch('/docs/' + gristDocId + '/access');
+    var data = await usersApiFetch('/access');
     allUsers = [];
     if (data.users) {
       data.users.forEach(function(u) {
@@ -1939,7 +1884,6 @@ async function loadUsers() {
         });
       });
     }
-    // Sort: owners first, then editors, then viewers
     var order = { owners: 0, editors: 1, viewers: 2, members: 3 };
     allUsers.sort(function(a, b) {
       var diff = (order[a.access] || 9) - (order[b.access] || 9);
@@ -1961,13 +1905,13 @@ async function changeUserRole(email, newRole) {
   try {
     var delta = { users: {} };
     delta.users[email] = newRole;
-    await usersApiFetch('/docs/' + gristDocId + '/access', 'PATCH', { delta: delta });
+    await usersApiFetch('/access', 'PATCH', { delta: delta });
     showToast(t('roleChanged'), 'success');
     await loadUsers();
   } catch (e) {
     console.error('Error changing role:', e);
     showToast(t('roleChangeError') + e.message, 'error', 5000);
-    await loadUsers(); // reload to reset select
+    await loadUsers();
   }
 }
 
@@ -1976,7 +1920,7 @@ async function removeUser(email) {
   try {
     var delta = { users: {} };
     delta.users[email] = null;
-    await usersApiFetch('/docs/' + gristDocId + '/access', 'PATCH', { delta: delta });
+    await usersApiFetch('/access', 'PATCH', { delta: delta });
     showToast('✅ ' + email + ' retiré', 'success');
     await loadUsers();
   } catch (e) {
@@ -1994,7 +1938,7 @@ async function addUser() {
   try {
     var delta = { users: {} };
     delta.users[email] = role;
-    await usersApiFetch('/docs/' + gristDocId + '/access', 'PATCH', { delta: delta });
+    await usersApiFetch('/access', 'PATCH', { delta: delta });
     showToast('✅ ' + email + ' ajouté en tant que ' + role, 'success');
     usersAddEmail.value = '';
     await loadUsers();
@@ -2007,58 +1951,9 @@ async function addUser() {
 }
 
 function setupUsersListeners() {
-  if (!usersApiKeyHelpToggle) return;
-
-  usersApiKeyHelpToggle.addEventListener('click', function(e) {
-    e.preventDefault();
-    usersApiKeyHelp.classList.toggle('hidden');
-  });
-
-  usersApiKeySaveBtn.addEventListener('click', async function() {
-    var key = usersApiKeyInput.value.trim();
-    if (!key) {
-      usersApiKeyMessage.innerHTML = '<div class="message message-error">❌ Clé API requise</div>';
-      usersApiKeyMessage.classList.remove('hidden');
-      return;
-    }
-    usersApiKeySaveBtn.disabled = true;
-    usersApiKeyMessage.innerHTML = '<div class="message message-info">⏳ Vérification...</div>';
-    usersApiKeyMessage.classList.remove('hidden');
-
-    saveApiKey(key);
-    try {
-      await testApiKey();
-      usersApiKeyMessage.innerHTML = '<div class="message message-success">✅ Connecté !</div>';
-      setTimeout(function() {
-        showUsersManagement();
-        loadUsers();
-      }, 500);
-    } catch (e) {
-      clearApiKey();
-      usersApiKeyMessage.innerHTML = '<div class="message message-error">❌ Clé invalide : ' + e.message + '</div>';
-    } finally {
-      usersApiKeySaveBtn.disabled = false;
-    }
-  });
-
-  usersApiKeyInput.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') usersApiKeySaveBtn.click();
-  });
-
+  if (!usersRefreshBtn) return;
   usersRefreshBtn.addEventListener('click', function() { loadUsers(); });
-
-  usersDisconnectBtn.addEventListener('click', function() {
-    clearApiKey();
-    allUsers = [];
-    usersListEl.innerHTML = '';
-    usersStatsEl.innerHTML = '';
-    usersApiKeyInput.value = '';
-    showUsersSetup();
-    showToast('🔒 Déconnecté', 'info');
-  });
-
   usersSearchInput.addEventListener('input', function() { renderUsersList(); });
-
   usersAddBtn.addEventListener('click', addUser);
   usersAddEmail.addEventListener('keypress', function(e) {
     if (e.key === 'Enter') addUser();
@@ -2066,47 +1961,13 @@ function setupUsersListeners() {
 }
 
 async function initUsersTab() {
-  await detectGristUrl();
   setupUsersListeners();
-
-  var key = loadApiKey();
-  if (key) {
-    try {
-      await testApiKey();
-      showUsersManagement();
-      loadUsers();
-    } catch (e) {
-      clearApiKey();
-      showUsersSetup();
-    }
-  } else {
-    showUsersSetup();
-  }
+  // Show management directly — no API key needed
+  var apiKeySetup = document.getElementById('users-apikey-setup');
+  if (apiKeySetup) apiKeySetup.classList.add('hidden');
+  if (usersManagement) usersManagement.classList.remove('hidden');
+  await loadUsers();
 }
-
-// =============================================================================
-// I18N additions for Users tab
-// =============================================================================
-
-i18n.fr.usersApiKeyTitle = 'Clé API requise';
-i18n.fr.usersApiKeyDesc = 'Pour gérer les utilisateurs du document, entrez votre clé API Grist. Elle sera stockée uniquement dans votre navigateur.';
-i18n.fr.usersApiKeyHelp = '💡 Comment obtenir ma clé API ?';
-i18n.fr.usersApiKeyStep1 = 'Cliquez sur votre nom en haut à droite → Paramètres du compte';
-i18n.fr.usersApiKeyStep2 = 'Descendez jusqu\'à la section "API Key" → cliquez sur "Create" ou copiez la clé existante';
-i18n.fr.usersApiKeyStep3 = 'Collez la clé ci-dessus';
-i18n.fr.usersApiKeySave = '🔓 Connecter';
-i18n.fr.usersConnected = 'Connecté à l\'API Grist';
-i18n.fr.usersDisconnect = 'Déconnecter';
-
-i18n.en.usersApiKeyTitle = 'API Key Required';
-i18n.en.usersApiKeyDesc = 'To manage document users, enter your Grist API key. It will only be stored in your browser.';
-i18n.en.usersApiKeyHelp = '💡 How to get my API key?';
-i18n.en.usersApiKeyStep1 = 'Click your name in the top-right → Account Settings';
-i18n.en.usersApiKeyStep2 = 'Scroll down to the "API Key" section → click "Create" or copy the existing key';
-i18n.en.usersApiKeyStep3 = 'Paste the key above';
-i18n.en.usersApiKeySave = '🔓 Connect';
-i18n.en.usersConnected = 'Connected to Grist API';
-i18n.en.usersDisconnect = 'Disconnect';
 
 // Start
 init();

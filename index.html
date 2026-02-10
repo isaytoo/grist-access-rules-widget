@@ -544,37 +544,14 @@
 
       <!-- Tab: Users -->
       <div id="tab-users" class="tab-content active">
-        <!-- API Key setup -->
-        <div id="users-apikey-setup" class="card" style="text-align:center; padding:32px;">
-          <div style="font-size:48px; margin-bottom:12px;">🔑</div>
-          <h3 style="margin-bottom:8px;" data-i18n="usersApiKeyTitle">Clé API requise</h3>
-          <p style="color:#64748b; font-size:13px; margin-bottom:16px;" data-i18n="usersApiKeyDesc">Pour gérer les utilisateurs du document, entrez votre clé API Grist. Elle sera stockée uniquement dans votre navigateur.</p>
-          <div style="max-width:500px; margin:0 auto;">
-            <input type="password" id="users-apikey-input" class="api-key-input" placeholder="Collez votre clé API ici..." style="width:100%;">
-            <div style="margin:8px 0;">
-              <a href="#" id="users-apikey-help-toggle" style="color:#3b82f6; font-size:12px; font-weight:600; cursor:pointer;" data-i18n="usersApiKeyHelp">💡 Comment obtenir ma clé API ?</a>
-            </div>
-            <div id="users-apikey-help" class="hidden" style="text-align:left; background:#f8fafc; padding:14px; border-radius:8px; font-size:12px; color:#475569; line-height:1.8; margin-bottom:12px;">
-              <ol style="padding-left:18px;">
-                <li data-i18n="usersApiKeyStep1">Cliquez sur votre nom en haut à droite → Paramètres du compte</li>
-                <li data-i18n="usersApiKeyStep2">Descendez jusqu'à la section "API Key" → cliquez sur "Create" ou copiez la clé existante</li>
-                <li data-i18n="usersApiKeyStep3">Collez la clé ci-dessus</li>
-              </ol>
-            </div>
-            <button class="btn btn-primary" id="users-apikey-save-btn" style="width:100%;" data-i18n="usersApiKeySave">🔓 Connecter</button>
-            <div id="users-apikey-message" class="hidden" style="margin-top:8px;"></div>
-          </div>
-        </div>
-
-        <!-- Users management (shown after API key) -->
-        <div id="users-management" class="hidden">
+        <!-- Users management (no API key needed — uses Plugin API token) -->
+        <div id="users-management">
           <!-- Connection bar -->
           <div id="users-connection-bar" class="api-key-bar">
             <span class="dot"></span>
-            <span id="users-connection-text" data-i18n="usersConnected">Connecté à l'API Grist</span>
+            <span data-i18n="usersConnected">Connecté à l'API Grist</span>
             <span style="flex:1;"></span>
             <button class="btn btn-sm btn-secondary" id="users-refresh-btn" style="padding:4px 10px;">🔄</button>
-            <button class="btn btn-sm" id="users-disconnect-btn" style="padding:4px 10px; color:#dc2626; font-size:11px;" data-i18n="usersDisconnect">Déconnecter</button>
           </div>
 
           <!-- Stats pills -->
