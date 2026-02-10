@@ -566,30 +566,6 @@
           </div>
         </div>
 
-        <!-- SaaS message (shown when CORS blocks /access) -->
-        <div id="users-saas-message" class="card hidden" style="text-align:center; padding:32px;">
-          <div style="font-size:48px; margin-bottom:12px;">☁️</div>
-          <h3 style="margin-bottom:8px;">Grist SaaS détecté</h3>
-          <p style="color:#64748b; font-size:13px; margin-bottom:16px; line-height:1.7;">
-            La gestion des utilisateurs depuis un widget externe n'est <strong>pas disponible</strong> sur Grist SaaS (docs.getgrist.com) en raison des restrictions de sécurité (CORS).<br><br>
-            Cette fonctionnalité est disponible uniquement sur <strong>Grist self-hosted</strong>.
-          </p>
-          <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:16px; margin-bottom:16px; text-align:left;">
-            <div style="font-weight:700; font-size:14px; color:#1e40af; margin-bottom:8px;">💡 Comment gérer les utilisateurs ?</div>
-            <ul style="font-size:13px; color:#1e40af; line-height:1.8; padding-left:20px; margin:0;">
-              <li>Cliquez sur l'icône <strong>Partager</strong> (🔗) en haut à droite de votre document</li>
-              <li>Ajoutez des emails et attribuez les rôles (Propriétaire, Éditeur, Lecteur)</li>
-              <li>Utilisez les onglets <strong>Attributs</strong> et <strong>Configurer</strong> de ce widget pour les règles avancées</li>
-            </ul>
-          </div>
-          <div style="background:#fefce8; border:1px solid #fde68a; border-radius:10px; padding:14px; text-align:left;">
-            <div style="font-weight:700; font-size:13px; color:#92400e; margin-bottom:4px;">🏠 Grist self-hosted ?</div>
-            <p style="font-size:12px; color:#92400e; margin:0; line-height:1.6;">
-              Si vous utilisez Grist self-hosted, assurez-vous que les headers CORS sont configurés pour autoriser les requêtes depuis le domaine du widget. La gestion complète des utilisateurs sera alors disponible.
-            </p>
-          </div>
-        </div>
-
         <!-- Users management (shown after API key validation) -->
         <div id="users-management" class="hidden">
           <!-- Connection bar -->

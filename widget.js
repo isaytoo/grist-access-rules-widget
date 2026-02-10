@@ -1724,11 +1724,10 @@ async function deleteAttrDataRow(rowId, tableId) {
 }
 
 // =============================================================================
-// USERS TAB — Dynamic: self-hosted (API key) vs SaaS (info message)
+// USERS TAB — Uses Vercel proxy to bypass CORS (works on SaaS + self-hosted)
 // =============================================================================
 
 var usersApiKeySetup = document.getElementById('users-apikey-setup');
-var usersSaasMessage = document.getElementById('users-saas-message');
 var usersManagement = document.getElementById('users-management');
 var usersRefreshBtn = document.getElementById('users-refresh-btn');
 var usersSearchInput = document.getElementById('users-search');
@@ -1743,36 +1742,22 @@ var usersStatsEl = document.getElementById('users-stats');
 var allUsers = [];
 var usersFilterRole = 'all';
 var userApiKey = '';
-var userApiBaseUrl = '';
-var isSelfHosted = false;
+var gristServerUrl = ''; // e.g. "https://docs.getgrist.com"
+var gristDocId = '';      // e.g. "t2q2MvbRBWE4"
 
-async function detectBaseUrl() {
+async function detectGristInfo() {
   var info = await getToken();
-  userApiBaseUrl = info.baseUrl;
-  return userApiBaseUrl;
-}
-
-// Detect if Grist is self-hosted by checking the baseUrl domain
-async function detectSelfHosted() {
-  try {
-    var info = await getToken();
-    var url = new URL(info.baseUrl);
-    var hostname = url.hostname.toLowerCase();
-    // Known SaaS domains
-    var saasHosts = ['docs.getgrist.com', 'getgrist.com', 'grist.anct.gouv.fr'];
-    var isSaas = saasHosts.some(function(h) { return hostname === h || hostname.endsWith('.' + h); });
-    isSelfHosted = !isSaas;
-    console.log('Grist host: ' + hostname + ' → ' + (isSelfHosted ? 'self-hosted' : 'SaaS'));
-    return isSelfHosted;
-  } catch (e) {
-    console.error('Cannot detect Grist type:', e);
-    isSelfHosted = false;
-    return false;
+  // info.baseUrl = "https://docs.getgrist.com/api/docs/DOC_ID"
+  var match = info.baseUrl.match(/^(https?:\/\/[^/]+)\/api\/docs\/([^/?]+)/);
+  if (match) {
+    gristServerUrl = match[1];
+    gristDocId = match[2];
   }
+  console.log('Grist server:', gristServerUrl, 'Doc:', gristDocId);
 }
 
 function getUserApiStorageKey() {
-  return 'grist_user_api_key';
+  return 'grist_user_api_key_' + gristDocId;
 }
 
 function loadUserApiKey() {
@@ -1790,16 +1775,24 @@ function clearUserApiKey() {
   try { localStorage.removeItem(getUserApiStorageKey()); } catch (e) {}
 }
 
+// All requests go through /api/proxy (same-origin, no CORS)
 async function usersApiFetch(endpoint, method, body) {
   method = method || 'GET';
-  var sep = endpoint.indexOf('?') !== -1 ? '&' : '?';
-  var url = userApiBaseUrl + endpoint + sep + 'auth=' + encodeURIComponent(userApiKey);
-  var opts = {
+  var proxyUrl = window.location.origin + '/api/proxy';
+  var payload = {
+    gristUrl: gristServerUrl,
+    docId: gristDocId,
+    endpoint: endpoint,
     method: method,
-    headers: { 'Content-Type': 'application/json' }
+    apiKey: userApiKey
   };
-  if (body) opts.body = JSON.stringify(body);
-  var resp = await fetch(url, opts);
+  if (body) payload.body = body;
+
+  var resp = await fetch(proxyUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
   if (!resp.ok) {
     var errText = await resp.text();
     throw new Error(resp.status + ': ' + errText);
@@ -1991,19 +1984,11 @@ async function addUser() {
 function showUsersSetup() {
   if (usersApiKeySetup) usersApiKeySetup.classList.remove('hidden');
   if (usersManagement) usersManagement.classList.add('hidden');
-  if (usersSaasMessage) usersSaasMessage.classList.add('hidden');
 }
 
 function showUsersManagement() {
   if (usersApiKeySetup) usersApiKeySetup.classList.add('hidden');
   if (usersManagement) usersManagement.classList.remove('hidden');
-  if (usersSaasMessage) usersSaasMessage.classList.add('hidden');
-}
-
-function showUsersSaas() {
-  if (usersApiKeySetup) usersApiKeySetup.classList.add('hidden');
-  if (usersManagement) usersManagement.classList.add('hidden');
-  if (usersSaasMessage) usersSaasMessage.classList.remove('hidden');
 }
 
 function setupUsersListeners() {
@@ -2075,20 +2060,10 @@ function setupUsersListeners() {
 }
 
 async function initUsersTab() {
-  await detectBaseUrl();
+  await detectGristInfo();
   setupUsersListeners();
 
-  // Step 1: Detect if self-hosted or SaaS
-  var selfHosted = await detectSelfHosted();
-  console.log('Self-hosted detected:', selfHosted);
-
-  if (!selfHosted) {
-    // SaaS: show info message
-    showUsersSaas();
-    return;
-  }
-
-  // Step 2: Self-hosted — check for saved API key
+  // Check for saved API key
   var key = loadUserApiKey();
   if (key) {
     try {
