@@ -1720,5 +1720,394 @@ async function deleteAttrDataRow(rowId, tableId) {
   }
 }
 
+// =============================================================================
+// USERS TAB — API Key + User Management via REST API
+// =============================================================================
+
+var usersApiKeySetup = document.getElementById('users-apikey-setup');
+var usersManagement = document.getElementById('users-management');
+var usersApiKeyInput = document.getElementById('users-apikey-input');
+var usersApiKeySaveBtn = document.getElementById('users-apikey-save-btn');
+var usersApiKeyMessage = document.getElementById('users-apikey-message');
+var usersApiKeyHelpToggle = document.getElementById('users-apikey-help-toggle');
+var usersApiKeyHelp = document.getElementById('users-apikey-help');
+var usersRefreshBtn = document.getElementById('users-refresh-btn');
+var usersDisconnectBtn = document.getElementById('users-disconnect-btn');
+var usersSearchInput = document.getElementById('users-search');
+var usersAddEmail = document.getElementById('users-add-email');
+var usersAddRole = document.getElementById('users-add-role');
+var usersAddBtn = document.getElementById('users-add-btn');
+var usersListEl = document.getElementById('users-list');
+var usersLoadingEl = document.getElementById('users-loading');
+var usersEmptyEl = document.getElementById('users-empty');
+var usersStatsEl = document.getElementById('users-stats');
+
+var storedApiKey = '';
+var gristBaseUrl = '';
+var gristDocId = '';
+var allUsers = []; // [{id, email, name, access}]
+var usersFilterRole = 'all';
+
+// Derive Grist base URL from the widget token
+async function detectGristUrl() {
+  try {
+    var info = await getToken();
+    // info.baseUrl is like "https://grist.example.com/api/docs/DOC_ID"
+    var parts = info.baseUrl.match(/^(https?:\/\/[^/]+)\/api\/docs\/([^/?]+)/);
+    if (parts) {
+      gristBaseUrl = parts[1];
+      gristDocId = parts[2];
+      return true;
+    }
+  } catch (e) {
+    console.error('Cannot detect Grist URL:', e);
+  }
+  return false;
+}
+
+function getStorageKey() {
+  return 'grist_api_key_' + gristDocId;
+}
+
+function loadApiKey() {
+  try {
+    storedApiKey = localStorage.getItem(getStorageKey()) || '';
+  } catch (e) { storedApiKey = ''; }
+  return storedApiKey;
+}
+
+function saveApiKey(key) {
+  storedApiKey = key;
+  try { localStorage.setItem(getStorageKey(), key); } catch (e) {}
+}
+
+function clearApiKey() {
+  storedApiKey = '';
+  try { localStorage.removeItem(getStorageKey()); } catch (e) {}
+}
+
+async function usersApiFetch(endpoint, method, body) {
+  method = method || 'GET';
+  var url = gristBaseUrl + '/api' + endpoint;
+  var opts = {
+    method: method,
+    headers: {
+      'Authorization': 'Bearer ' + storedApiKey,
+      'Content-Type': 'application/json'
+    }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  var resp = await fetch(url, opts);
+  if (!resp.ok) {
+    var errText = await resp.text();
+    throw new Error(resp.status + ': ' + errText);
+  }
+  var text = await resp.text();
+  return text ? JSON.parse(text) : {};
+}
+
+async function testApiKey() {
+  try {
+    var data = await usersApiFetch('/docs/' + gristDocId + '/access');
+    return data;
+  } catch (e) {
+    throw e;
+  }
+}
+
+function showUsersSetup() {
+  usersApiKeySetup.classList.remove('hidden');
+  usersManagement.classList.add('hidden');
+}
+
+function showUsersManagement() {
+  usersApiKeySetup.classList.add('hidden');
+  usersManagement.classList.remove('hidden');
+}
+
+function renderUsersStats() {
+  var counts = { all: allUsers.length, owners: 0, editors: 0, viewers: 0, members: 0 };
+  allUsers.forEach(function(u) {
+    if (u.access === 'owners') counts.owners++;
+    else if (u.access === 'editors') counts.editors++;
+    else if (u.access === 'viewers') counts.viewers++;
+    else if (u.access === 'members') counts.members++;
+  });
+
+  var html = '';
+  html += '<span class="users-stat all' + (usersFilterRole === 'all' ? ' active' : '') + '" onclick="filterUsers(\'all\')">' + counts.all + ' Total</span>';
+  if (counts.owners) html += '<span class="users-stat owners' + (usersFilterRole === 'owners' ? ' active' : '') + '" onclick="filterUsers(\'owners\')">👑 ' + counts.owners + ' Propriétaire' + (counts.owners > 1 ? 's' : '') + '</span>';
+  if (counts.editors) html += '<span class="users-stat editors' + (usersFilterRole === 'editors' ? ' active' : '') + '" onclick="filterUsers(\'editors\')">✏️ ' + counts.editors + ' Éditeur' + (counts.editors > 1 ? 's' : '') + '</span>';
+  if (counts.viewers) html += '<span class="users-stat viewers' + (usersFilterRole === 'viewers' ? ' active' : '') + '" onclick="filterUsers(\'viewers\')">👁️ ' + counts.viewers + ' Lecteur' + (counts.viewers > 1 ? 's' : '') + '</span>';
+  if (counts.members) html += '<span class="users-stat members' + (usersFilterRole === 'members' ? ' active' : '') + '" onclick="filterUsers(\'members\')">🔗 ' + counts.members + ' Membre' + (counts.members > 1 ? 's' : '') + '</span>';
+  usersStatsEl.innerHTML = html;
+}
+
+function filterUsers(role) {
+  usersFilterRole = role;
+  renderUsersStats();
+  renderUsersList();
+}
+
+function getAvatarClass(access) {
+  if (access === 'owners') return 'owner';
+  if (access === 'editors') return 'editor';
+  if (access === 'viewers') return 'viewer';
+  return 'member';
+}
+
+function getRoleSelectClass(access) {
+  if (access === 'owners') return 'role-owner';
+  if (access === 'editors') return 'role-editor';
+  if (access === 'viewers') return 'role-viewer';
+  return 'role-member';
+}
+
+function getInitials(name, email) {
+  if (name && name.trim()) {
+    var parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+  if (email) return email.substring(0, 2).toUpperCase();
+  return '??';
+}
+
+function renderUsersList() {
+  var search = (usersSearchInput.value || '').trim().toLowerCase();
+  var filtered = allUsers.filter(function(u) {
+    if (usersFilterRole !== 'all' && u.access !== usersFilterRole) return false;
+    if (search) {
+      var hay = ((u.name || '') + ' ' + (u.email || '')).toLowerCase();
+      return hay.indexOf(search) !== -1;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    usersListEl.innerHTML = '';
+    usersEmptyEl.classList.remove('hidden');
+    return;
+  }
+
+  usersEmptyEl.classList.add('hidden');
+  var html = '';
+  filtered.forEach(function(u) {
+    var initials = getInitials(u.name, u.email);
+    var avatarCls = getAvatarClass(u.access);
+    var roleCls = getRoleSelectClass(u.access);
+    var displayName = u.name || u.email || '—';
+
+    html += '<div class="user-card">';
+    html += '  <div class="user-info">';
+    html += '    <div class="user-avatar ' + avatarCls + '">' + sanitizeForDisplay(initials) + '</div>';
+    html += '    <div class="user-details">';
+    html += '      <div class="user-name">' + sanitizeForDisplay(displayName) + '</div>';
+    html += '      <div class="user-email">' + sanitizeForDisplay(u.email || '') + '</div>';
+    html += '    </div>';
+    html += '  </div>';
+    html += '  <div class="user-actions">';
+    html += '    <select class="role-select ' + roleCls + '" onchange="changeUserRole(\'' + sanitizeForDisplay(u.email).replace(/'/g, "\\'") + '\', this.value)">';
+    html += '      <option value="owners"' + (u.access === 'owners' ? ' selected' : '') + '>👑 Propriétaire</option>';
+    html += '      <option value="editors"' + (u.access === 'editors' ? ' selected' : '') + '>✏️ Éditeur</option>';
+    html += '      <option value="viewers"' + (u.access === 'viewers' ? ' selected' : '') + '>👁️ Lecteur</option>';
+    html += '    </select>';
+    html += '    <button class="user-remove-btn" onclick="removeUser(\'' + sanitizeForDisplay(u.email).replace(/'/g, "\\'") + '\')" title="Retirer">✕</button>';
+    html += '  </div>';
+    html += '</div>';
+  });
+
+  usersListEl.innerHTML = html;
+}
+
+async function loadUsers() {
+  usersLoadingEl.classList.remove('hidden');
+  usersListEl.innerHTML = '';
+  usersEmptyEl.classList.add('hidden');
+
+  try {
+    var data = await usersApiFetch('/docs/' + gristDocId + '/access');
+    allUsers = [];
+    if (data.users) {
+      data.users.forEach(function(u) {
+        if (u.email === 'everyone@getgrist.com' || u.email === 'anon@getgrist.com') return;
+        allUsers.push({
+          id: u.id,
+          email: u.email || '',
+          name: u.name || '',
+          access: u.access || 'viewers'
+        });
+      });
+    }
+    // Sort: owners first, then editors, then viewers
+    var order = { owners: 0, editors: 1, viewers: 2, members: 3 };
+    allUsers.sort(function(a, b) {
+      var diff = (order[a.access] || 9) - (order[b.access] || 9);
+      if (diff !== 0) return diff;
+      return (a.email || '').localeCompare(b.email || '');
+    });
+
+    renderUsersStats();
+    renderUsersList();
+  } catch (e) {
+    console.error('Error loading users:', e);
+    showToast(t('errorLoadUsers') + e.message, 'error', 5000);
+  } finally {
+    usersLoadingEl.classList.add('hidden');
+  }
+}
+
+async function changeUserRole(email, newRole) {
+  try {
+    var delta = { users: {} };
+    delta.users[email] = newRole;
+    await usersApiFetch('/docs/' + gristDocId + '/access', 'PATCH', { delta: delta });
+    showToast(t('roleChanged'), 'success');
+    await loadUsers();
+  } catch (e) {
+    console.error('Error changing role:', e);
+    showToast(t('roleChangeError') + e.message, 'error', 5000);
+    await loadUsers(); // reload to reset select
+  }
+}
+
+async function removeUser(email) {
+  if (!confirm('Retirer ' + email + ' du document ?')) return;
+  try {
+    var delta = { users: {} };
+    delta.users[email] = null;
+    await usersApiFetch('/docs/' + gristDocId + '/access', 'PATCH', { delta: delta });
+    showToast('✅ ' + email + ' retiré', 'success');
+    await loadUsers();
+  } catch (e) {
+    console.error('Error removing user:', e);
+    showToast('❌ Erreur : ' + e.message, 'error', 5000);
+  }
+}
+
+async function addUser() {
+  var email = usersAddEmail.value.trim();
+  var role = usersAddRole.value;
+  if (!email) { showToast('❌ Email requis', 'error'); return; }
+
+  usersAddBtn.disabled = true;
+  try {
+    var delta = { users: {} };
+    delta.users[email] = role;
+    await usersApiFetch('/docs/' + gristDocId + '/access', 'PATCH', { delta: delta });
+    showToast('✅ ' + email + ' ajouté en tant que ' + role, 'success');
+    usersAddEmail.value = '';
+    await loadUsers();
+  } catch (e) {
+    console.error('Error adding user:', e);
+    showToast('❌ Erreur : ' + e.message, 'error', 5000);
+  } finally {
+    usersAddBtn.disabled = false;
+  }
+}
+
+function setupUsersListeners() {
+  if (!usersApiKeyHelpToggle) return;
+
+  usersApiKeyHelpToggle.addEventListener('click', function(e) {
+    e.preventDefault();
+    usersApiKeyHelp.classList.toggle('hidden');
+  });
+
+  usersApiKeySaveBtn.addEventListener('click', async function() {
+    var key = usersApiKeyInput.value.trim();
+    if (!key) {
+      usersApiKeyMessage.innerHTML = '<div class="message message-error">❌ Clé API requise</div>';
+      usersApiKeyMessage.classList.remove('hidden');
+      return;
+    }
+    usersApiKeySaveBtn.disabled = true;
+    usersApiKeyMessage.innerHTML = '<div class="message message-info">⏳ Vérification...</div>';
+    usersApiKeyMessage.classList.remove('hidden');
+
+    saveApiKey(key);
+    try {
+      await testApiKey();
+      usersApiKeyMessage.innerHTML = '<div class="message message-success">✅ Connecté !</div>';
+      setTimeout(function() {
+        showUsersManagement();
+        loadUsers();
+      }, 500);
+    } catch (e) {
+      clearApiKey();
+      usersApiKeyMessage.innerHTML = '<div class="message message-error">❌ Clé invalide : ' + e.message + '</div>';
+    } finally {
+      usersApiKeySaveBtn.disabled = false;
+    }
+  });
+
+  usersApiKeyInput.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') usersApiKeySaveBtn.click();
+  });
+
+  usersRefreshBtn.addEventListener('click', function() { loadUsers(); });
+
+  usersDisconnectBtn.addEventListener('click', function() {
+    clearApiKey();
+    allUsers = [];
+    usersListEl.innerHTML = '';
+    usersStatsEl.innerHTML = '';
+    usersApiKeyInput.value = '';
+    showUsersSetup();
+    showToast('🔒 Déconnecté', 'info');
+  });
+
+  usersSearchInput.addEventListener('input', function() { renderUsersList(); });
+
+  usersAddBtn.addEventListener('click', addUser);
+  usersAddEmail.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') addUser();
+  });
+}
+
+async function initUsersTab() {
+  await detectGristUrl();
+  setupUsersListeners();
+
+  var key = loadApiKey();
+  if (key) {
+    try {
+      await testApiKey();
+      showUsersManagement();
+      loadUsers();
+    } catch (e) {
+      clearApiKey();
+      showUsersSetup();
+    }
+  } else {
+    showUsersSetup();
+  }
+}
+
+// =============================================================================
+// I18N additions for Users tab
+// =============================================================================
+
+i18n.fr.usersApiKeyTitle = 'Clé API requise';
+i18n.fr.usersApiKeyDesc = 'Pour gérer les utilisateurs du document, entrez votre clé API Grist. Elle sera stockée uniquement dans votre navigateur.';
+i18n.fr.usersApiKeyHelp = '💡 Comment obtenir ma clé API ?';
+i18n.fr.usersApiKeyStep1 = 'Allez dans votre profil Grist (icône en haut à droite → Profil)';
+i18n.fr.usersApiKeyStep2 = 'Section "API Key" → cliquez sur "Create" ou copiez la clé existante';
+i18n.fr.usersApiKeyStep3 = 'Collez la clé ci-dessus';
+i18n.fr.usersApiKeySave = '🔓 Connecter';
+i18n.fr.usersConnected = 'Connecté à l\'API Grist';
+i18n.fr.usersDisconnect = 'Déconnecter';
+
+i18n.en.usersApiKeyTitle = 'API Key Required';
+i18n.en.usersApiKeyDesc = 'To manage document users, enter your Grist API key. It will only be stored in your browser.';
+i18n.en.usersApiKeyHelp = '💡 How to get my API key?';
+i18n.en.usersApiKeyStep1 = 'Go to your Grist profile (top-right icon → Profile)';
+i18n.en.usersApiKeyStep2 = 'Section "API Key" → click "Create" or copy the existing key';
+i18n.en.usersApiKeyStep3 = 'Paste the key above';
+i18n.en.usersApiKeySave = '🔓 Connect';
+i18n.en.usersConnected = 'Connected to Grist API';
+i18n.en.usersDisconnect = 'Disconnect';
+
 // Start
 init();
+initUsersTab();
