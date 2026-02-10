@@ -1721,10 +1721,11 @@ async function deleteAttrDataRow(rowId, tableId) {
 }
 
 // =============================================================================
-// USERS TAB — API Key stored in localStorage, requests via same-origin baseUrl
+// USERS TAB — Dynamic: self-hosted (API key) vs SaaS (info message)
 // =============================================================================
 
 var usersApiKeySetup = document.getElementById('users-apikey-setup');
+var usersSaasMessage = document.getElementById('users-saas-message');
 var usersManagement = document.getElementById('users-management');
 var usersRefreshBtn = document.getElementById('users-refresh-btn');
 var usersSearchInput = document.getElementById('users-search');
@@ -1739,14 +1740,32 @@ var usersStatsEl = document.getElementById('users-stats');
 var allUsers = [];
 var usersFilterRole = 'all';
 var userApiKey = '';
-var userApiBaseUrl = ''; // same-origin base from plugin token
+var userApiBaseUrl = '';
+var isSelfHosted = false;
 
 async function detectBaseUrl() {
-  var info = await getToken(); // reuse existing read-only token helper
-  // info.baseUrl = "https://docs.getgrist.com/api/docs/DOC_ID"
-  // We need "https://docs.getgrist.com" + "/api/docs/DOC_ID"
-  userApiBaseUrl = info.baseUrl; // already includes /api/docs/DOC_ID
+  var info = await getToken();
+  userApiBaseUrl = info.baseUrl;
   return userApiBaseUrl;
+}
+
+// Detect if Grist is self-hosted by trying a same-origin preflight
+async function detectSelfHosted() {
+  try {
+    var info = await getToken();
+    // Try a HEAD/GET to /access with the plugin token — if CORS blocks it, we get a TypeError
+    var url = info.baseUrl + '/access?auth=' + info.token;
+    var resp = await fetch(url, { method: 'GET' });
+    // If we get here without CORS error, it's self-hosted (CORS allowed)
+    // The response might be 403 (token doesn't have access rights) but CORS passed
+    isSelfHosted = true;
+    return true;
+  } catch (e) {
+    // TypeError: Failed to fetch = CORS blocked = SaaS
+    console.log('CORS blocked → SaaS detected:', e.message);
+    isSelfHosted = false;
+    return false;
+  }
 }
 
 function getUserApiStorageKey() {
@@ -1770,8 +1789,6 @@ function clearUserApiKey() {
 
 async function usersApiFetch(endpoint, method, body) {
   method = method || 'GET';
-  // Use same-origin baseUrl from plugin token to avoid CORS
-  // But authenticate with user's personal API key
   var sep = endpoint.indexOf('?') !== -1 ? '&' : '?';
   var url = userApiBaseUrl + endpoint + sep + 'auth=' + encodeURIComponent(userApiKey);
   var opts = {
@@ -1971,23 +1988,29 @@ async function addUser() {
 function showUsersSetup() {
   if (usersApiKeySetup) usersApiKeySetup.classList.remove('hidden');
   if (usersManagement) usersManagement.classList.add('hidden');
+  if (usersSaasMessage) usersSaasMessage.classList.add('hidden');
 }
 
 function showUsersManagement() {
   if (usersApiKeySetup) usersApiKeySetup.classList.add('hidden');
   if (usersManagement) usersManagement.classList.remove('hidden');
+  if (usersSaasMessage) usersSaasMessage.classList.add('hidden');
+}
+
+function showUsersSaas() {
+  if (usersApiKeySetup) usersApiKeySetup.classList.add('hidden');
+  if (usersManagement) usersManagement.classList.add('hidden');
+  if (usersSaasMessage) usersSaasMessage.classList.remove('hidden');
 }
 
 function setupUsersListeners() {
-  if (!usersRefreshBtn) return;
-  usersRefreshBtn.addEventListener('click', function() { loadUsers(); });
-  usersSearchInput.addEventListener('input', function() { renderUsersList(); });
-  usersAddBtn.addEventListener('click', addUser);
-  usersAddEmail.addEventListener('keypress', function(e) {
+  if (usersRefreshBtn) usersRefreshBtn.addEventListener('click', function() { loadUsers(); });
+  if (usersSearchInput) usersSearchInput.addEventListener('input', function() { renderUsersList(); });
+  if (usersAddBtn) usersAddBtn.addEventListener('click', addUser);
+  if (usersAddEmail) usersAddEmail.addEventListener('keypress', function(e) {
     if (e.key === 'Enter') addUser();
   });
 
-  // API key setup
   var helpToggle = document.getElementById('users-apikey-help-toggle');
   var helpDiv = document.getElementById('users-apikey-help');
   var apiInput = document.getElementById('users-apikey-input');
@@ -2039,8 +2062,8 @@ function setupUsersListeners() {
     disconnectBtn.addEventListener('click', function() {
       clearUserApiKey();
       allUsers = [];
-      usersListEl.innerHTML = '';
-      usersStatsEl.innerHTML = '';
+      if (usersListEl) usersListEl.innerHTML = '';
+      if (usersStatsEl) usersStatsEl.innerHTML = '';
       if (apiInput) apiInput.value = '';
       showUsersSetup();
       showToast('🔒 Déconnecté', 'info');
@@ -2052,6 +2075,17 @@ async function initUsersTab() {
   await detectBaseUrl();
   setupUsersListeners();
 
+  // Step 1: Detect if self-hosted or SaaS
+  var selfHosted = await detectSelfHosted();
+  console.log('Self-hosted detected:', selfHosted);
+
+  if (!selfHosted) {
+    // SaaS: show info message
+    showUsersSaas();
+    return;
+  }
+
+  // Step 2: Self-hosted — check for saved API key
   var key = loadUserApiKey();
   if (key) {
     try {
