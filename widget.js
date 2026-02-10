@@ -1777,6 +1777,8 @@ function loadApiKey() {
 }
 
 function saveApiKey(key) {
+  // Strip any non-ASCII, whitespace, or invisible chars
+  key = key.replace(/[^\x20-\x7E]/g, '').trim();
   storedApiKey = key;
   try { localStorage.setItem(getStorageKey(), key); } catch (e) {}
 }
@@ -1788,13 +1790,11 @@ function clearApiKey() {
 
 async function usersApiFetch(endpoint, method, body) {
   method = method || 'GET';
-  var url = gristBaseUrl + '/api' + endpoint;
+  var sep = endpoint.indexOf('?') !== -1 ? '&' : '?';
+  var url = gristBaseUrl + '/api' + endpoint + sep + 'auth=' + encodeURIComponent(storedApiKey);
   var opts = {
     method: method,
-    headers: {
-      'Authorization': 'Bearer ' + storedApiKey,
-      'Content-Type': 'application/json'
-    }
+    headers: { 'Content-Type': 'application/json' }
   };
   if (body) opts.body = JSON.stringify(body);
   var resp = await fetch(url, opts);
