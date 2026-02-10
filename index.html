@@ -597,18 +597,24 @@
           <!-- Stats pills -->
           <div class="users-stats" id="users-stats"></div>
 
-          <!-- Search -->
-          <input type="text" id="users-search" class="users-search" placeholder="Rechercher un email, un nom..." style="margin-bottom:12px;">
+          <!-- Add user -->
+          <div style="margin-bottom:14px;">
+            <h4 style="font-size:13px; font-weight:700; color:#334155; margin:0 0 6px 0;">➕ Ajouter un utilisateur</h4>
+            <div class="add-user-form">
+              <input type="email" id="users-add-email" placeholder="email@exemple.com">
+              <select id="users-add-role">
+                <option value="viewers">👁️ Lecteur</option>
+                <option value="editors">✏️ Éditeur</option>
+                <option value="owners">👑 Propriétaire</option>
+              </select>
+              <button class="btn btn-primary btn-sm" id="users-add-btn">➕</button>
+            </div>
+          </div>
 
-          <!-- Add user form -->
-          <div class="add-user-form">
-            <input type="email" id="users-add-email" placeholder="email@exemple.com">
-            <select id="users-add-role">
-              <option value="viewers">👁️ Lecteur</option>
-              <option value="editors">✏️ Éditeur</option>
-              <option value="owners">👑 Propriétaire</option>
-            </select>
-            <button class="btn btn-primary btn-sm" id="users-add-btn">➕</button>
+          <!-- Search -->
+          <div style="margin-bottom:12px;">
+            <h4 style="font-size:13px; font-weight:700; color:#334155; margin:0 0 6px 0;">🔍 Rechercher</h4>
+            <input type="text" id="users-search" class="users-search" placeholder="Rechercher un email, un nom..." style="margin-bottom:0;">
           </div>
 
           <!-- Users list -->
