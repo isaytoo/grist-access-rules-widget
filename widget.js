@@ -1721,9 +1721,10 @@ async function deleteAttrDataRow(rowId, tableId) {
 }
 
 // =============================================================================
-// USERS TAB — Uses Plugin API getAccessToken (same-origin, no CORS issues)
+// USERS TAB — API Key stored in localStorage, requests via same-origin baseUrl
 // =============================================================================
 
+var usersApiKeySetup = document.getElementById('users-apikey-setup');
 var usersManagement = document.getElementById('users-management');
 var usersRefreshBtn = document.getElementById('users-refresh-btn');
 var usersSearchInput = document.getElementById('users-search');
@@ -1737,25 +1738,42 @@ var usersStatsEl = document.getElementById('users-stats');
 
 var allUsers = [];
 var usersFilterRole = 'all';
-var usersWriteTokenInfo = null;
+var userApiKey = '';
+var userApiBaseUrl = ''; // same-origin base from plugin token
 
-async function getWriteToken() {
-  if (!usersWriteTokenInfo || Date.now() > usersWriteTokenInfo.expiry) {
-    var result = await grist.docApi.getAccessToken({ readOnly: false });
-    usersWriteTokenInfo = {
-      baseUrl: result.baseUrl,
-      token: result.token,
-      expiry: Date.now() + result.ttlMsecs - 30000
-    };
-  }
-  return usersWriteTokenInfo;
+async function detectBaseUrl() {
+  var info = await getToken(); // reuse existing read-only token helper
+  // info.baseUrl = "https://docs.getgrist.com/api/docs/DOC_ID"
+  // We need "https://docs.getgrist.com" + "/api/docs/DOC_ID"
+  userApiBaseUrl = info.baseUrl; // already includes /api/docs/DOC_ID
+  return userApiBaseUrl;
+}
+
+function getUserApiStorageKey() {
+  return 'grist_user_api_key';
+}
+
+function loadUserApiKey() {
+  try { userApiKey = localStorage.getItem(getUserApiStorageKey()) || ''; } catch (e) { userApiKey = ''; }
+  return userApiKey;
+}
+
+function saveUserApiKey(key) {
+  userApiKey = key.replace(/[^\x20-\x7E]/g, '').trim();
+  try { localStorage.setItem(getUserApiStorageKey(), userApiKey); } catch (e) {}
+}
+
+function clearUserApiKey() {
+  userApiKey = '';
+  try { localStorage.removeItem(getUserApiStorageKey()); } catch (e) {}
 }
 
 async function usersApiFetch(endpoint, method, body) {
   method = method || 'GET';
-  var info = await getWriteToken();
+  // Use same-origin baseUrl from plugin token to avoid CORS
+  // But authenticate with user's personal API key
   var sep = endpoint.indexOf('?') !== -1 ? '&' : '?';
-  var url = info.baseUrl + endpoint + sep + 'auth=' + info.token;
+  var url = userApiBaseUrl + endpoint + sep + 'auth=' + encodeURIComponent(userApiKey);
   var opts = {
     method: method,
     headers: { 'Content-Type': 'application/json' }
@@ -1950,6 +1968,16 @@ async function addUser() {
   }
 }
 
+function showUsersSetup() {
+  if (usersApiKeySetup) usersApiKeySetup.classList.remove('hidden');
+  if (usersManagement) usersManagement.classList.add('hidden');
+}
+
+function showUsersManagement() {
+  if (usersApiKeySetup) usersApiKeySetup.classList.add('hidden');
+  if (usersManagement) usersManagement.classList.remove('hidden');
+}
+
 function setupUsersListeners() {
   if (!usersRefreshBtn) return;
   usersRefreshBtn.addEventListener('click', function() { loadUsers(); });
@@ -1958,15 +1986,85 @@ function setupUsersListeners() {
   usersAddEmail.addEventListener('keypress', function(e) {
     if (e.key === 'Enter') addUser();
   });
+
+  // API key setup
+  var helpToggle = document.getElementById('users-apikey-help-toggle');
+  var helpDiv = document.getElementById('users-apikey-help');
+  var apiInput = document.getElementById('users-apikey-input');
+  var saveBtn = document.getElementById('users-apikey-save-btn');
+  var msgDiv = document.getElementById('users-apikey-message');
+  var disconnectBtn = document.getElementById('users-disconnect-btn');
+
+  if (helpToggle && helpDiv) {
+    helpToggle.addEventListener('click', function(e) {
+      e.preventDefault();
+      helpDiv.classList.toggle('hidden');
+    });
+  }
+
+  if (saveBtn) {
+    saveBtn.addEventListener('click', async function() {
+      var key = apiInput ? apiInput.value.trim() : '';
+      if (!key) {
+        if (msgDiv) { msgDiv.innerHTML = '<div class="message message-error">❌ Clé API requise</div>'; msgDiv.classList.remove('hidden'); }
+        return;
+      }
+      saveBtn.disabled = true;
+      if (msgDiv) { msgDiv.innerHTML = '<div class="message message-info">⏳ Vérification...</div>'; msgDiv.classList.remove('hidden'); }
+
+      saveUserApiKey(key);
+      try {
+        await usersApiFetch('/access');
+        if (msgDiv) msgDiv.innerHTML = '<div class="message message-success">✅ Connecté !</div>';
+        setTimeout(function() {
+          showUsersManagement();
+          loadUsers();
+        }, 500);
+      } catch (e) {
+        clearUserApiKey();
+        if (msgDiv) { msgDiv.innerHTML = '<div class="message message-error">❌ Clé invalide : ' + sanitizeForDisplay(e.message) + '</div>'; }
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+  }
+
+  if (apiInput) {
+    apiInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter' && saveBtn) saveBtn.click();
+    });
+  }
+
+  if (disconnectBtn) {
+    disconnectBtn.addEventListener('click', function() {
+      clearUserApiKey();
+      allUsers = [];
+      usersListEl.innerHTML = '';
+      usersStatsEl.innerHTML = '';
+      if (apiInput) apiInput.value = '';
+      showUsersSetup();
+      showToast('🔒 Déconnecté', 'info');
+    });
+  }
 }
 
 async function initUsersTab() {
+  await detectBaseUrl();
   setupUsersListeners();
-  // Show management directly — no API key needed
-  var apiKeySetup = document.getElementById('users-apikey-setup');
-  if (apiKeySetup) apiKeySetup.classList.add('hidden');
-  if (usersManagement) usersManagement.classList.remove('hidden');
-  await loadUsers();
+
+  var key = loadUserApiKey();
+  if (key) {
+    try {
+      await usersApiFetch('/access');
+      showUsersManagement();
+      loadUsers();
+    } catch (e) {
+      clearUserApiKey();
+      showUsersSetup();
+    }
+  } else {
+    showUsersSetup();
+  }
 }
 
 // Start
