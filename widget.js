@@ -1655,8 +1655,11 @@ async function loadAttrData(selectValue) {
     attrDataTableContainer.classList.remove('hidden');
 
   } catch (error) {
-    console.error('Error loading attribute data:', error);
-    attrDataTbody.innerHTML = '<tr><td colspan="3" style="color:#dc2626;">' + error.message + '</td></tr>';
+    console.warn('Attribute table not found or inaccessible:', info.tableId, error.message);
+    var errMsg = error.message.indexOf('KeyError') !== -1
+      ? 'La table <strong>' + sanitizeForDisplay(info.tableId) + '</strong> n\'existe pas. Supprimez cet attribut et recréez-le.'
+      : sanitizeForDisplay(error.message);
+    attrDataTbody.innerHTML = '<tr><td colspan="3" style="color:#dc2626; padding:12px; font-size:13px;">' + errMsg + '</td></tr>';
     attrDataTableContainer.classList.remove('hidden');
   } finally {
     attrDataLoading.classList.add('hidden');
