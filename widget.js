@@ -1995,6 +1995,23 @@ async function removeUser(email) {
   }
 }
 
+function parseApiError(errMsg) {
+  try {
+    var match = errMsg.match(/\d+:\s*(.*)/);
+    if (match) {
+      var json = JSON.parse(match[1]);
+      if (json.error) {
+        if (json.error.indexOf('collaborators') !== -1 || json.error.indexOf('shares permitted') !== -1) {
+          var max = json.details && json.details.limit ? json.details.limit.maximum : '?';
+          return '⚠️ Limite atteinte : ' + max + ' collaborateurs max sur ce plan. Passez au plan supérieur ou ajoutez l\'utilisateur comme membre de l\'équipe.';
+        }
+        return json.error;
+      }
+    }
+  } catch (e) {}
+  return errMsg;
+}
+
 async function addUser() {
   var email = usersAddEmail.value.trim();
   var role = usersAddRole.value;
@@ -2010,7 +2027,7 @@ async function addUser() {
     await loadUsers();
   } catch (e) {
     console.error('Error adding user:', e);
-    showToast('❌ Erreur : ' + e.message, 'error', 5000);
+    showToast('❌ ' + parseApiError(e.message), 'error', 6000);
   } finally {
     usersAddBtn.disabled = false;
   }
