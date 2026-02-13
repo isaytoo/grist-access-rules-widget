@@ -1878,6 +1878,7 @@ var usersPerPage = 10;
 var usersCurrentPage = 1;
 
 async function detectGristInfo() {
+  // Method 1: getAccessToken (works when widget has full access)
   try {
     var info = await getToken();
     // info.baseUrl = "https://docs.getgrist.com/api/docs/DOC_ID"
@@ -1887,20 +1888,65 @@ async function detectGristInfo() {
       gristDocId = match[2];
     }
   } catch (e) {
-    console.warn('detectGristInfo failed (getAccessToken not available):', e.message);
-    // Fallback: try to extract from parent URL
+    console.warn('detectGristInfo: getAccessToken failed:', e.message);
+  }
+
+  // Method 2: parent URL (works in Widget Builder, same domain)
+  if (!gristServerUrl || !gristDocId) {
     try {
       var parentUrl = window.parent.location.href;
       var urlMatch = parentUrl.match(/^(https?:\/\/[^/]+)\/(?:o\/[^/]+\/)?doc\/([^/?#]+)/);
       if (urlMatch) {
-        gristServerUrl = urlMatch[1];
-        gristDocId = urlMatch[2];
+        gristServerUrl = gristServerUrl || urlMatch[1];
+        gristDocId = gristDocId || urlMatch[2];
       }
     } catch (e2) {
-      // Cross-origin, can't access parent
-      console.warn('Cannot access parent URL (cross-origin)');
+      console.warn('detectGristInfo: parent URL not accessible');
     }
   }
+
+  // Method 3: document.referrer (often set by Grist when loading widget)
+  if (!gristServerUrl || !gristDocId) {
+    try {
+      var ref = document.referrer;
+      if (ref) {
+        var refMatch = ref.match(/^(https?:\/\/[^/]+)\/(?:o\/[^/]+\/)?doc\/([^/?#]+)/);
+        if (refMatch) {
+          gristServerUrl = gristServerUrl || refMatch[1];
+          gristDocId = gristDocId || refMatch[2];
+          console.log('detectGristInfo: extracted from document.referrer');
+        }
+      }
+    } catch (e3) {
+      console.warn('detectGristInfo: referrer not available');
+    }
+  }
+
+  // Method 4: ancestorOrigins (Chrome/Edge — gives parent origin)
+  if (!gristServerUrl) {
+    try {
+      if (window.location.ancestorOrigins && window.location.ancestorOrigins.length > 0) {
+        gristServerUrl = window.location.ancestorOrigins[0];
+        console.log('detectGristInfo: extracted origin from ancestorOrigins');
+      }
+    } catch (e4) {
+      console.warn('detectGristInfo: ancestorOrigins not available');
+    }
+  }
+
+  // Method 5: Grist provides docId via onRecord or onOptions
+  if (!gristDocId && gristServerUrl) {
+    // Try to get docId from the URL hash or search params (Grist sometimes passes it)
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var docParam = params.get('docId') || params.get('doc');
+      if (docParam) {
+        gristDocId = docParam;
+        console.log('detectGristInfo: extracted docId from URL params');
+      }
+    } catch (e5) {}
+  }
+
   console.log('Grist server:', gristServerUrl, 'Doc:', gristDocId);
 }
 
