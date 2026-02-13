@@ -1930,7 +1930,7 @@ async function usersDirectFetch(endpoint, method, body) {
 // Proxy API call (when CORS blocks direct calls)
 async function usersProxyFetch(endpoint, method, body) {
   method = method || 'GET';
-  var proxyUrl = window.location.origin + '/api/proxy';
+  var proxyUrl = 'https://proxy.gristup.fr/proxy';
   var payload = {
     gristUrl: gristServerUrl,
     docId: gristDocId,
@@ -2308,7 +2308,7 @@ async function detectDirectApi() {
 // Check if the proxy endpoint is available (Vercel deployment vs static hosting)
 async function detectProxy() {
   try {
-    var resp = await fetch(window.location.origin + '/api/proxy', {
+    var resp = await fetch('https://proxy.gristup.fr/proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gristUrl: '', docId: '', endpoint: '', apiKey: '' })
