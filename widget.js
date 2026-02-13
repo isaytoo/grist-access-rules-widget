@@ -1877,14 +1877,57 @@ var usersPerPage = 10;
 var usersCurrentPage = 1;
 
 async function detectGristInfo() {
-  var info = await getToken();
-  // info.baseUrl = "https://docs.getgrist.com/api/docs/DOC_ID"
-  var match = info.baseUrl.match(/^(https?:\/\/[^/]+)\/api\/docs\/([^/?]+)/);
-  if (match) {
-    gristServerUrl = match[1];
-    gristDocId = match[2];
+  try {
+    var info = await getToken();
+    // info.baseUrl = "https://docs.getgrist.com/api/docs/DOC_ID"
+    var match = info.baseUrl.match(/^(https?:\/\/[^/]+)\/api\/docs\/([^/?]+)/);
+    if (match) {
+      gristServerUrl = match[1];
+      gristDocId = match[2];
+    }
+  } catch (e) {
+    console.warn('detectGristInfo failed (getAccessToken not available):', e.message);
+    // Fallback: try to extract from parent URL
+    try {
+      var parentUrl = window.parent.location.href;
+      var urlMatch = parentUrl.match(/^(https?:\/\/[^/]+)\/(?:o\/[^/]+\/)?doc\/([^/?#]+)/);
+      if (urlMatch) {
+        gristServerUrl = urlMatch[1];
+        gristDocId = urlMatch[2];
+      }
+    } catch (e2) {
+      // Cross-origin, can't access parent
+      console.warn('Cannot access parent URL (cross-origin)');
+    }
   }
   console.log('Grist server:', gristServerUrl, 'Doc:', gristDocId);
+}
+
+function showManualGristFields() {
+  var container = document.getElementById('users-manual-grist-fields');
+  if (container) { container.classList.remove('hidden'); return; }
+  // Create manual fields dynamically
+  var setupDiv = document.getElementById('users-apikey-setup');
+  if (!setupDiv) return;
+  var inputDiv = setupDiv.querySelector('div[style*="max-width"]');
+  if (!inputDiv) return;
+  var fieldsHtml = '<div id="users-manual-grist-fields" style="margin-bottom:12px; text-align:left;">'
+    + '<div style="background:#fefce8; border:1px solid #fde68a; border-radius:8px; padding:12px; margin-bottom:12px; font-size:12px; color:#92400e;">'
+    + '⚠️ Détection automatique impossible. Entrez manuellement les informations de votre serveur Grist.'
+    + '</div>'
+    + '<label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#334155;">URL du serveur Grist</label>'
+    + '<input type="url" id="users-grist-url-input" class="api-key-input" placeholder="https://docs.getgrist.com" style="width:100%; margin-bottom:10px;">'
+    + '<label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#334155;">Document ID</label>'
+    + '<input type="text" id="users-grist-docid-input" class="api-key-input" placeholder="Visible dans l\'URL : /doc/XXXXXX" style="width:100%; margin-bottom:4px;">'
+    + '<p style="font-size:11px; color:#94a3b8; margin:0;">Trouvez le Doc ID dans l\'URL de votre document : https://votre-grist.com/doc/<strong>DOC_ID_ICI</strong></p>'
+    + '</div>';
+  // Insert before the API key input
+  var apiInput = document.getElementById('users-apikey-input');
+  if (apiInput && apiInput.parentNode) {
+    var temp = document.createElement('div');
+    temp.innerHTML = fieldsHtml;
+    apiInput.parentNode.insertBefore(temp.firstChild, apiInput);
+  }
 }
 
 function getUserApiStorageKey() {
@@ -2243,6 +2286,19 @@ function setupUsersListeners() {
       if (msgDiv) { msgDiv.innerHTML = '<div class="message message-info">⏳ Vérification...</div>'; msgDiv.classList.remove('hidden'); }
 
       saveUserApiKey(key);
+      // If gristServerUrl/gristDocId not detected, try to get from manual inputs
+      if (!gristServerUrl || !gristDocId) {
+        var manualUrl = document.getElementById('users-grist-url-input');
+        var manualDoc = document.getElementById('users-grist-docid-input');
+        if (manualUrl && manualUrl.value.trim()) gristServerUrl = manualUrl.value.trim().replace(/\/$/, '');
+        if (manualDoc && manualDoc.value.trim()) gristDocId = manualDoc.value.trim();
+      }
+      if (!gristServerUrl || !gristDocId) {
+        if (msgDiv) { msgDiv.innerHTML = '<div class="message message-error">❌ Impossible de détecter l\'URL Grist. Remplissez les champs URL et Doc ID ci-dessus.</div>'; }
+        showManualGristFields();
+        saveBtn.disabled = false;
+        return;
+      }
       try {
         // Try proxy first (reliable), then direct
         if (proxyAvailable) {
