@@ -2300,11 +2300,19 @@ function setupUsersListeners() {
         return;
       }
       try {
+        var connected = false;
         // Try proxy first (reliable), then direct
         if (proxyAvailable) {
           useDirectApi = false;
-          await usersProxyFetch('/access');
-        } else {
+          try {
+            await usersProxyFetch('/access');
+            connected = true;
+          } catch (proxyErr) {
+            console.warn('Proxy failed, trying direct mode:', proxyErr.message);
+          }
+        }
+        // Fallback to direct API if proxy failed (WAF, etc.)
+        if (!connected) {
           useDirectApi = true;
           await usersDirectFetch('/access');
         }
@@ -2402,23 +2410,22 @@ async function initUsersTab() {
     return;
   }
 
-  // Step 3: Try proxy first (most reliable, works everywhere)
+  // Step 3: Try proxy first, fallback to direct
   if (hasProxy) {
     useDirectApi = false;
-    console.log('Users API: proxy mode');
+    console.log('Users API: trying proxy mode');
     try {
-      await usersApiFetch('/access');
+      await usersProxyFetch('/access');
+      console.log('Users API: proxy mode OK');
       showUsersManagement();
       loadUsers();
       return;
     } catch (e) {
-      clearUserApiKey();
-      showUsersSetup();
-      return;
+      console.warn('Proxy failed, trying direct:', e.message);
     }
   }
 
-  // Step 4: No proxy — try direct API (self-hosted with CORS configured)
+  // Step 4: Try direct API (self-hosted with CORS or proxy failed due to WAF)
   var directOk = await detectDirectApi();
   if (directOk) {
     useDirectApi = true;
@@ -2433,6 +2440,13 @@ async function initUsersTab() {
       showUsersSetup();
       return;
     }
+  }
+
+  // Step 4b: Proxy failed and direct not available — clear key and show setup
+  if (hasProxy) {
+    clearUserApiKey();
+    showUsersSetup();
+    return;
   }
 
   // Step 5: Nothing works
