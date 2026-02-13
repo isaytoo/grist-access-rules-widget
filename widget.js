@@ -2448,7 +2448,9 @@ async function initUsersTab() {
   await detectGristInfo();
   setupUsersListeners();
 
-  // Detect if running inside Widget Builder (same domain as Grist)
+  // Detect if running inside Widget Builder
+  // Widget Builder uses blob: or srcdoc: URLs, so window.location.origin is "null" or "blob:..."
+  // But ancestorOrigins contains the Grist origin, and grist.docApi works
   if (gristServerUrl) {
     try {
       var widgetOrigin = window.location.origin;
@@ -2458,8 +2460,33 @@ async function initUsersTab() {
       isWidgetBuilder = false;
     }
   }
+  // Also detect blob:/null origin (Widget Builder creates blob: iframes)
+  if (!isWidgetBuilder) {
+    var loc = window.location.href || '';
+    var ori = window.location.origin || '';
+    if (ori === 'null' || loc.startsWith('blob:') || loc.startsWith('data:')) {
+      isWidgetBuilder = true;
+      // Extract gristServerUrl from ancestorOrigins if not yet set
+      if (!gristServerUrl) {
+        try {
+          if (window.location.ancestorOrigins && window.location.ancestorOrigins.length > 0) {
+            gristServerUrl = window.location.ancestorOrigins[0];
+          }
+        } catch (e) {}
+      }
+      if (!gristServerUrl) {
+        try {
+          var ref = document.referrer;
+          if (ref) {
+            var refOrigin = new URL(ref).origin;
+            if (refOrigin && refOrigin !== 'null') gristServerUrl = refOrigin;
+          }
+        } catch (e) {}
+      }
+    }
+  }
   if (isWidgetBuilder) {
-    console.log('Users API: Widget Builder mode detected (same domain)');
+    console.log('Users API: Widget Builder mode detected');
   }
 
   // Step 1: Check for saved API key
@@ -2474,6 +2501,12 @@ async function initUsersTab() {
     // Always show setup (Widget Builder or proxy available)
     if (isWidgetBuilder || hasProxy) {
       showUsersSetup();
+      // If Widget Builder but docId missing, show manual fields pre-filled
+      if (isWidgetBuilder && gristServerUrl && !gristDocId) {
+        showManualGristFields();
+        var urlInput = document.getElementById('users-grist-url-input');
+        if (urlInput) urlInput.value = gristServerUrl;
+      }
     } else {
       showUsersNoProxy();
     }
