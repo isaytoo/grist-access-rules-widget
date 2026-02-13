@@ -1873,6 +1873,7 @@ var gristDocId = '';      // e.g. "t2q2MvbRBWE4"
 var proxyAvailable = false;
 var directApiAvailable = false; // true if CORS allows direct API calls
 var useDirectApi = false;       // which mode is active
+var isWidgetBuilder = false;    // true if running inside Widget Builder (same domain as Grist)
 var usersPerPage = 10;
 var usersCurrentPage = 1;
 
@@ -2301,8 +2302,14 @@ function setupUsersListeners() {
       }
       try {
         var connected = false;
-        // Try proxy first (reliable), then direct
-        if (proxyAvailable) {
+        // Widget Builder mode: always direct (same domain)
+        if (isWidgetBuilder) {
+          useDirectApi = true;
+          await usersDirectFetch('/access');
+          connected = true;
+        }
+        // External mode: try proxy first (reliable), then direct
+        if (!connected && proxyAvailable) {
           useDirectApi = false;
           try {
             await usersProxyFetch('/access');
@@ -2395,14 +2402,31 @@ async function initUsersTab() {
   await detectGristInfo();
   setupUsersListeners();
 
+  // Detect if running inside Widget Builder (same domain as Grist)
+  if (gristServerUrl) {
+    try {
+      var widgetOrigin = window.location.origin;
+      var gristOrigin = new URL(gristServerUrl).origin;
+      isWidgetBuilder = (widgetOrigin === gristOrigin);
+    } catch (e) {
+      isWidgetBuilder = false;
+    }
+  }
+  if (isWidgetBuilder) {
+    console.log('Users API: Widget Builder mode detected (same domain)');
+  }
+
   // Step 1: Check for saved API key
   var key = loadUserApiKey();
 
-  // Step 2: Detect available mode (proxy first, then direct)
-  var hasProxy = await detectProxy();
+  // Step 2: Detect available mode
+  // Widget Builder = always direct (same domain, no CORS)
+  // External = try proxy first, then direct
+  var hasProxy = isWidgetBuilder ? false : await detectProxy();
 
   if (!key) {
-    if (hasProxy) {
+    // Always show setup (Widget Builder or proxy available)
+    if (isWidgetBuilder || hasProxy) {
       showUsersSetup();
     } else {
       showUsersNoProxy();
@@ -2410,7 +2434,23 @@ async function initUsersTab() {
     return;
   }
 
-  // Step 3: Try proxy first, fallback to direct
+  // Step 3: Widget Builder mode — always use direct API
+  if (isWidgetBuilder) {
+    useDirectApi = true;
+    console.log('Users API: direct mode (Widget Builder, same domain)');
+    try {
+      await usersDirectFetch('/access');
+      showUsersManagement();
+      loadUsers();
+      return;
+    } catch (e) {
+      clearUserApiKey();
+      showUsersSetup();
+      return;
+    }
+  }
+
+  // Step 4: External mode — try proxy first, fallback to direct
   if (hasProxy) {
     useDirectApi = false;
     console.log('Users API: trying proxy mode');
@@ -2425,7 +2465,7 @@ async function initUsersTab() {
     }
   }
 
-  // Step 4: Try direct API (self-hosted with CORS or proxy failed due to WAF)
+  // Step 5: Try direct API (self-hosted with CORS or proxy failed due to WAF)
   var directOk = await detectDirectApi();
   if (directOk) {
     useDirectApi = true;
@@ -2442,7 +2482,7 @@ async function initUsersTab() {
     }
   }
 
-  // Step 4b: Proxy failed and direct not available — clear key and show setup
+  // Step 6: Proxy failed and direct not available — clear key and show setup
   if (hasProxy) {
     clearUserApiKey();
     showUsersSetup();
