@@ -2381,7 +2381,15 @@ function setupUsersListeners() {
         }, 500);
       } catch (e) {
         clearUserApiKey();
-        if (msgDiv) { msgDiv.innerHTML = '<div class="message message-error">❌ Clé invalide : ' + sanitizeForDisplay(parseApiError(e.message)) + '</div>'; }
+        var errMsg = parseApiError(e.message);
+        var isNetworkBlock = e.message.indexOf('Failed to fetch') !== -1 || e.message.indexOf('NetworkError') !== -1 || e.message.indexOf('Load failed') !== -1 || e.message.indexOf('CORS') !== -1 || e.message.indexOf('Access-Control') !== -1 || e.message.indexOf('multiorigine') !== -1;
+        if (isNetworkBlock) {
+          // Server blocks external requests — show the friendly "non disponible" panel
+          if (msgDiv) msgDiv.classList.add('hidden');
+          showUsersNoProxy();
+        } else {
+          if (msgDiv) { msgDiv.innerHTML = '<div class="message message-error">❌ Clé invalide : ' + sanitizeForDisplay(errMsg) + '</div>'; }
+        }
       } finally {
         saveBtn.disabled = false;
       }
