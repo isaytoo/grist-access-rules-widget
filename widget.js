@@ -2000,14 +2000,17 @@ function clearUserApiKey() {
 async function usersDirectFetch(endpoint, method, body) {
   method = method || 'GET';
   var url = gristServerUrl + '/api/docs/' + gristDocId + endpoint;
+  // Use query param auth instead of Authorization header to avoid CORS preflight
+  var separator = url.includes('?') ? '&' : '?';
+  url += separator + 'auth=' + encodeURIComponent(userApiKey);
   var opts = {
     method: method,
-    headers: {
-      'Authorization': 'Bearer ' + userApiKey,
-      'Content-Type': 'application/json'
-    }
+    headers: {}
   };
-  if (body) opts.body = JSON.stringify(body);
+  if (body) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
   var resp = await fetch(url, opts);
   if (!resp.ok) {
     var errText = await resp.text();
