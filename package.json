@@ -1,5 +1,5 @@
 {
-  "name": "grist-access-rules-widget",
+  "name": "@isaytoo/access-rules",
   "version": "1.0.0",
   "description": "Grist widget to manage document access rules (tables, columns, rows)",
   "main": "index.html",
@@ -9,8 +9,8 @@
   },
   "grist": {
     "name": "Access Rules Manager",
-    "url": "https://grist-access-rules-widget.vercel.app/index.html",
-    "widgetId": "grist-access-rules-widget",
+    "url": "https://gristlabs.github.io/grist-widget/access-rules/",
+    "widgetId": "@isaytoo/widget-access-rules",
     "published": true,
     "accessLevel": "full",
     "renderAfterReady": true,
