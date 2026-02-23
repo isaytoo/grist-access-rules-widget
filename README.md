@@ -27,7 +27,7 @@ A Grist custom widget to visually manage document access rules. Control read/wri
 ### Setup
 
 1. Add the widget to your Grist document as a custom widget
-2. Use the URL: `https://grist-access-rules-widget.vercel.app/index.html`
+2. Use the URL: `https://isaytoo.github.io/grist-access-rules-widget/`
 3. Grant **full access** when prompted
 4. Enter your **API key** (Owner rights required)
 5. The widget auto-detects your Grist URL and document ID
@@ -87,7 +87,7 @@ Widget Grist personnalisé pour gérer visuellement les règles d'accès d'un do
 ### Installation
 
 1. Ajoutez le widget à votre document Grist comme widget personnalisé
-2. Utilisez l'URL : `https://grist-access-rules-widget.vercel.app/index.html`
+2. Utilisez l'URL : `https://isaytoo.github.io/grist-access-rules-widget/`
 3. Accordez l'**accès complet** quand demandé
 4. Entrez votre **clé API** (droits Owner requis)
 5. Le widget détecte automatiquement votre URL Grist et l'ID du document
