@@ -2032,9 +2032,18 @@ function saveGristInfo() {
 
 function loadUserApiKey() {
   try { 
-    userApiKey = localStorage.getItem(STORAGE_KEY_API) || ''; 
-    if (userApiKey) {
+    var saved = localStorage.getItem(STORAGE_KEY_API) || '';
+    // Validate: API key should not contain spaces or be a log message
+    if (saved && !saved.includes(' ') && !saved.includes('detectGristInfo')) {
+      userApiKey = saved;
       console.log('loadUserApiKey: found saved API key');
+    } else if (saved) {
+      // Corrupted value, clear it
+      console.warn('loadUserApiKey: clearing corrupted API key');
+      localStorage.removeItem(STORAGE_KEY_API);
+      userApiKey = '';
+    } else {
+      userApiKey = '';
     }
   } catch (e) { 
     userApiKey = ''; 
