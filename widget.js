@@ -1977,55 +1977,72 @@ function showManualGristFields() {
   }
 }
 
-function getUserApiStorageKey() {
-  return 'grist_user_api_key_' + gristDocId;
-}
+// Storage keys - use fixed keys to avoid losing data when docId detection fails
+var STORAGE_KEY_API = 'grist_access_rules_apiKey';
+var STORAGE_KEY_DOC_ID = 'grist_access_rules_docId';
+var STORAGE_KEY_SERVER_URL = 'grist_access_rules_serverUrl';
 
 function loadSavedGristInfo() {
-  // Load saved gristDocId and gristServerUrl if not detected
+  // Load saved gristDocId and gristServerUrl FIRST (before API key)
   try {
-    if (!gristDocId) {
-      var savedDocId = localStorage.getItem('grist_access_rules_docId');
-      if (savedDocId) {
-        gristDocId = savedDocId;
-        console.log('loadSavedGristInfo: restored docId from localStorage');
-      }
+    var savedDocId = localStorage.getItem(STORAGE_KEY_DOC_ID);
+    var savedUrl = localStorage.getItem(STORAGE_KEY_SERVER_URL);
+    
+    // Only restore if current detection failed
+    if (!gristDocId && savedDocId) {
+      gristDocId = savedDocId;
+      console.log('loadSavedGristInfo: restored docId from localStorage:', gristDocId);
     }
-    if (!gristServerUrl) {
-      var savedUrl = localStorage.getItem('grist_access_rules_serverUrl');
-      if (savedUrl) {
-        gristServerUrl = savedUrl;
-        console.log('loadSavedGristInfo: restored serverUrl from localStorage');
-      }
+    if (!gristServerUrl && savedUrl) {
+      gristServerUrl = savedUrl;
+      console.log('loadSavedGristInfo: restored serverUrl from localStorage:', gristServerUrl);
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('loadSavedGristInfo error:', e);
+  }
 }
 
 function saveGristInfo() {
   // Save gristDocId and gristServerUrl for persistence
   try {
-    if (gristDocId) localStorage.setItem('grist_access_rules_docId', gristDocId);
-    if (gristServerUrl) localStorage.setItem('grist_access_rules_serverUrl', gristServerUrl);
-  } catch (e) {}
+    if (gristDocId) localStorage.setItem(STORAGE_KEY_DOC_ID, gristDocId);
+    if (gristServerUrl) localStorage.setItem(STORAGE_KEY_SERVER_URL, gristServerUrl);
+    console.log('saveGristInfo: saved docId=' + gristDocId + ', serverUrl=' + gristServerUrl);
+  } catch (e) {
+    console.warn('saveGristInfo error:', e);
+  }
 }
 
 function loadUserApiKey() {
-  try { userApiKey = localStorage.getItem(getUserApiStorageKey()) || ''; } catch (e) { userApiKey = ''; }
+  try { 
+    userApiKey = localStorage.getItem(STORAGE_KEY_API) || ''; 
+    if (userApiKey) {
+      console.log('loadUserApiKey: found saved API key');
+    }
+  } catch (e) { 
+    userApiKey = ''; 
+  }
   return userApiKey;
 }
 
 function saveUserApiKey(key) {
   userApiKey = key.replace(/[^\x20-\x7E]/g, '').trim();
   try { 
-    localStorage.setItem(getUserApiStorageKey(), userApiKey);
+    localStorage.setItem(STORAGE_KEY_API, userApiKey);
     // Also save grist info for persistence
     saveGristInfo();
-  } catch (e) {}
+    console.log('saveUserApiKey: saved API key and grist info');
+  } catch (e) {
+    console.warn('saveUserApiKey error:', e);
+  }
 }
 
 function clearUserApiKey() {
   userApiKey = '';
-  try { localStorage.removeItem(getUserApiStorageKey()); } catch (e) {}
+  try { 
+    localStorage.removeItem(STORAGE_KEY_API);
+    console.log('clearUserApiKey: removed API key');
+  } catch (e) {}
 }
 
 // Direct API call (when CORS is allowed, e.g. self-hosted with proper config)
