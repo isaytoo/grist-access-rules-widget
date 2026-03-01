@@ -1881,11 +1881,28 @@ async function detectGristInfo() {
   // Method 1: getAccessToken (works when widget has full access)
   try {
     var info = await getToken();
+    console.log('detectGristInfo: getAccessToken returned:', info);
     // info.baseUrl = "https://docs.getgrist.com/api/docs/DOC_ID"
-    var match = info.baseUrl.match(/^(https?:\/\/[^/]+)\/api\/docs\/([^/?]+)/);
-    if (match) {
-      gristServerUrl = match[1];
-      gristDocId = match[2];
+    // or for self-hosted: "https://grist.example.com/api/docs/DOC_ID"
+    if (info && info.baseUrl) {
+      var match = info.baseUrl.match(/^(https?:\/\/[^/]+)\/api\/docs\/([^/?]+)/);
+      if (match) {
+        gristServerUrl = match[1];
+        gristDocId = match[2];
+        console.log('detectGristInfo: extracted from baseUrl:', gristServerUrl, gristDocId);
+      } else {
+        // Try alternate pattern: just extract origin
+        try {
+          var url = new URL(info.baseUrl);
+          gristServerUrl = url.origin;
+          // Extract docId from path
+          var pathMatch = url.pathname.match(/\/api\/docs\/([^/?]+)/);
+          if (pathMatch) {
+            gristDocId = pathMatch[1];
+            console.log('detectGristInfo: extracted via URL parse:', gristServerUrl, gristDocId);
+          }
+        } catch (e) {}
+      }
     }
   } catch (e) {
     console.warn('detectGristInfo: getAccessToken failed:', e.message);
