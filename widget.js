@@ -2030,17 +2030,27 @@ function saveGristInfo() {
   }
 }
 
+function isValidApiKey(key) {
+  // Valid API key: no spaces, no colons, no parentheses, reasonable length
+  if (!key || typeof key !== 'string') return false;
+  if (key.length < 10 || key.length > 200) return false;
+  if (key.includes(' ') || key.includes(':') || key.includes('(') || key.includes(')')) return false;
+  if (key.includes('widget.js') || key.includes('detectGristInfo') || key.includes('http')) return false;
+  return true;
+}
+
 function loadUserApiKey() {
   try { 
     var saved = localStorage.getItem(STORAGE_KEY_API) || '';
-    // Validate: API key should not contain spaces or be a log message
-    if (saved && !saved.includes(' ') && !saved.includes('detectGristInfo')) {
+    if (isValidApiKey(saved)) {
       userApiKey = saved;
-      console.log('loadUserApiKey: found saved API key');
+      console.log('loadUserApiKey: found valid API key');
     } else if (saved) {
-      // Corrupted value, clear it
-      console.warn('loadUserApiKey: clearing corrupted API key');
+      // Corrupted value, clear ALL storage for this widget
+      console.warn('loadUserApiKey: clearing corrupted storage, value was:', saved.substring(0, 50));
       localStorage.removeItem(STORAGE_KEY_API);
+      localStorage.removeItem(STORAGE_KEY_DOC_ID);
+      localStorage.removeItem(STORAGE_KEY_SERVER_URL);
       userApiKey = '';
     } else {
       userApiKey = '';
