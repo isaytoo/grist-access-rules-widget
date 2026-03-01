@@ -2030,6 +2030,9 @@ function clearUserApiKey() {
 
 // Direct API call (when CORS is allowed, e.g. self-hosted with proper config)
 async function usersDirectFetch(endpoint, method, body) {
+  if (!gristServerUrl || !gristDocId) {
+    throw new Error('Grist server URL or Doc ID not detected');
+  }
   method = method || 'GET';
   var url = gristServerUrl + '/api/docs/' + gristDocId + endpoint;
   // Use query param auth instead of Authorization header to avoid CORS preflight
@@ -2054,6 +2057,9 @@ async function usersDirectFetch(endpoint, method, body) {
 
 // Proxy API call (when CORS blocks direct calls)
 async function usersProxyFetch(endpoint, method, body) {
+  if (!gristServerUrl || !gristDocId) {
+    throw new Error('Grist server URL or Doc ID not detected');
+  }
   method = method || 'GET';
   var proxyUrl = 'https://proxy.gristup.fr/proxy';
   var payload = {
@@ -2450,7 +2456,10 @@ function setupUsersListeners() {
 // Test if direct API calls work (CORS allowed including Authorization header)
 // Must test with the actual Authorization header since some servers allow simple CORS but block auth headers
 async function detectDirectApi() {
-  if (!userApiKey) { directApiAvailable = false; return false; }
+  if (!userApiKey || !gristServerUrl || !gristDocId) { 
+    directApiAvailable = false; 
+    return false; 
+  }
   try {
     var url = gristServerUrl + '/api/docs/' + gristDocId + '/access';
     var resp = await fetch(url, {
