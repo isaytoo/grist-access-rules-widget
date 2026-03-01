@@ -1981,6 +1981,34 @@ function getUserApiStorageKey() {
   return 'grist_user_api_key_' + gristDocId;
 }
 
+function loadSavedGristInfo() {
+  // Load saved gristDocId and gristServerUrl if not detected
+  try {
+    if (!gristDocId) {
+      var savedDocId = localStorage.getItem('grist_access_rules_docId');
+      if (savedDocId) {
+        gristDocId = savedDocId;
+        console.log('loadSavedGristInfo: restored docId from localStorage');
+      }
+    }
+    if (!gristServerUrl) {
+      var savedUrl = localStorage.getItem('grist_access_rules_serverUrl');
+      if (savedUrl) {
+        gristServerUrl = savedUrl;
+        console.log('loadSavedGristInfo: restored serverUrl from localStorage');
+      }
+    }
+  } catch (e) {}
+}
+
+function saveGristInfo() {
+  // Save gristDocId and gristServerUrl for persistence
+  try {
+    if (gristDocId) localStorage.setItem('grist_access_rules_docId', gristDocId);
+    if (gristServerUrl) localStorage.setItem('grist_access_rules_serverUrl', gristServerUrl);
+  } catch (e) {}
+}
+
 function loadUserApiKey() {
   try { userApiKey = localStorage.getItem(getUserApiStorageKey()) || ''; } catch (e) { userApiKey = ''; }
   return userApiKey;
@@ -1988,7 +2016,11 @@ function loadUserApiKey() {
 
 function saveUserApiKey(key) {
   userApiKey = key.replace(/[^\x20-\x7E]/g, '').trim();
-  try { localStorage.setItem(getUserApiStorageKey(), userApiKey); } catch (e) {}
+  try { 
+    localStorage.setItem(getUserApiStorageKey(), userApiKey);
+    // Also save grist info for persistence
+    saveGristInfo();
+  } catch (e) {}
 }
 
 function clearUserApiKey() {
@@ -2457,6 +2489,8 @@ function showUsersNoProxy() {
 
 async function initUsersTab() {
   await detectGristInfo();
+  // Load saved grist info if detection failed
+  loadSavedGristInfo();
   setupUsersListeners();
 
   // Detect if running inside Widget Builder
