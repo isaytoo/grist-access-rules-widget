@@ -2531,9 +2531,14 @@ function showUsersNoProxy() {
 }
 
 async function initUsersTab() {
-  await detectGristInfo();
-  // Load saved grist info if detection failed
+  // Load saved grist info FIRST (before detection)
   loadSavedGristInfo();
+  // Then try to detect (may override saved values if detection succeeds)
+  await detectGristInfo();
+  // Save detected info for next time
+  if (gristDocId && gristServerUrl) {
+    saveGristInfo();
+  }
   setupUsersListeners();
 
   // Detect if running inside Widget Builder
