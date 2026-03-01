@@ -2584,6 +2584,15 @@ async function initUsersTab() {
     return;
   }
 
+  // Check if we have required info to make API calls
+  if (!gristServerUrl || !gristDocId) {
+    console.warn('Missing gristServerUrl or gristDocId, showing setup');
+    // Don't clear API key - just show setup to get missing info
+    showUsersSetup();
+    showManualGristFields();
+    return;
+  }
+
   // Step 3: Widget Builder mode — always use direct API
   if (isWidgetBuilder) {
     useDirectApi = true;
@@ -2594,7 +2603,11 @@ async function initUsersTab() {
       loadUsers();
       return;
     } catch (e) {
-      clearUserApiKey();
+      console.warn('Direct API failed:', e.message);
+      // Only clear if it's an auth error (401/403), not a detection issue
+      if (e.message.includes('401') || e.message.includes('403') || e.message.includes('Invalid')) {
+        clearUserApiKey();
+      }
       showUsersSetup();
       return;
     }
@@ -2626,15 +2639,19 @@ async function initUsersTab() {
       loadUsers();
       return;
     } catch (e) {
-      clearUserApiKey();
+      console.warn('Direct API failed:', e.message);
+      // Only clear if it's an auth error
+      if (e.message.includes('401') || e.message.includes('403') || e.message.includes('Invalid')) {
+        clearUserApiKey();
+      }
       showUsersSetup();
       return;
     }
   }
 
-  // Step 6: Proxy failed and direct not available — clear key and show setup
+  // Step 6: Proxy failed and direct not available — show setup but don't clear key
   if (hasProxy) {
-    clearUserApiKey();
+    console.warn('Both proxy and direct failed, showing setup');
     showUsersSetup();
     return;
   }
