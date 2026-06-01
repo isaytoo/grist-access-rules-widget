@@ -222,6 +222,15 @@
     .matrix-table tr:hover td { background: #f8fafc; }
     .matrix-table tr:hover td:first-child { background: #f1f5f9; }
 
+    /* Widget Permissions */
+    .wp-check { width: 18px; height: 18px; cursor: pointer; accent-color: #3b82f6; }
+    .wp-email-cell { font-size: 13px; font-weight: 600; white-space: nowrap; }
+    .wp-you { font-size: 10px; color: #3b82f6; font-weight: 700; margin-left: 4px; }
+    .wp-owner-tag { font-size: 10px; color: #d97706; background: #fef3c7; padding: 2px 6px; border-radius: 4px; margin-left: 4px; }
+    .wp-del-btn { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 4px; }
+    .wp-del-btn:hover { background: #fee2e2; }
+    .wp-widget-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: #f1f5f9; border-radius: 6px; font-size: 12px; color: #475569; }
+
     /* Permission badges */
     .perm-badge {
       display: inline-block;
@@ -540,6 +549,7 @@
         <button class="tab" data-tab="tables" data-i18n="tabTables">📊 Tables</button>
         <button class="tab" data-tab="columns" data-i18n="tabColumns">📋 Colonnes</button>
         <button class="tab" data-tab="rules" data-i18n="tabRules">📜 Règles</button>
+        <button class="tab" data-tab="widgets" data-i18n="tabWidgetPerms">🎛️ Widgets</button>
         <button class="tab" data-tab="guide" data-i18n="tabGuide">📖 Guide</button>
       </div>
 
@@ -946,6 +956,43 @@
       </div>
 
     </div>
+
+      <!-- Tab: Widget Permissions -->
+      <div id="tab-widgets" class="tab-content">
+        <div class="card">
+          <h2 data-i18n="wpTitle">🎛️ Permissions des widgets</h2>
+          <p style="color:#64748b; font-size:13px; margin-bottom:16px;" data-i18n="wpSubtitle">Définissez quels onglets chaque utilisateur peut voir dans les widgets du document</p>
+
+          <div id="wp-owner-only" class="hidden" style="text-align:center; padding:24px; color:#94a3b8;">
+            <div style="font-size:32px; margin-bottom:8px;">🔒</div>
+            <span data-i18n="wpOwnerOnly">Réservé au propriétaire (Owner)</span>
+          </div>
+
+          <div id="wp-main">
+            <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
+              <select id="wp-widget-select" style="flex:1; min-width:200px; padding:8px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:13px;">
+                <option value="" data-i18n="wpSelectWidget">-- Sélectionner un widget --</option>
+              </select>
+            </div>
+
+            <div id="wp-no-widgets" class="hidden" style="text-align:center; padding:24px; color:#94a3b8;">
+              <div style="font-size:32px; margin-bottom:8px;">📦</div>
+              <span data-i18n="wpNoWidgets">Aucun widget enregistré</span>
+            </div>
+
+            <div id="wp-permissions-area" class="hidden">
+              <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+                <input type="email" id="wp-email-input" placeholder="Email de l'utilisateur" style="flex:1; padding:8px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:13px;">
+                <button id="wp-add-btn" class="btn-primary" style="padding:8px 16px; border-radius:8px; font-size:13px; white-space:nowrap;" data-i18n="wpAdd">Ajouter</button>
+              </div>
+
+              <div id="wp-permissions-table" style="overflow-x:auto;"></div>
+
+              <p style="font-size:11px; color:#94a3b8; margin-top:8px; font-style:italic;" data-i18n="wpHint">Les utilisateurs absents de ce tableau suivent leur rôle Grist par défaut.</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Tab: Guide -->
       <div id="tab-guide" class="tab-content">

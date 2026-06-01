@@ -145,7 +145,25 @@ var i18n = {
     attrStep2Title: 'Associer les utilisateurs',
     attrStep2Desc: 'Saisissez les emails et les valeurs pour chaque utilisateur.',
     attrStep3Title: 'Utiliser dans les règles',
-    attrStep3Desc: 'Allez dans l\'onglet <strong>⚙️ Configurer</strong> et utilisez vos attributs dans les conditions de vos règles d\'accès.'
+    attrStep3Desc: 'Allez dans l\'onglet <strong>⚙️ Configurer</strong> et utilisez vos attributs dans les conditions de vos règles d\'accès.',
+    tabWidgetPerms: '🎛️ Widgets',
+    wpTitle: '🎛️ Permissions des widgets',
+    wpSubtitle: 'Définissez quels onglets chaque utilisateur peut voir dans les widgets du document',
+    wpSelectWidget: '-- Sélectionner un widget --',
+    wpNoWidgets: 'Aucun widget enregistré. Les widgets s\'enregistrent automatiquement au démarrage.',
+    wpEmailPlaceholder: 'Email de l\'utilisateur',
+    wpAdd: 'Ajouter',
+    wpRemove: 'Retirer',
+    wpNoUsers: 'Aucun utilisateur configuré pour ce widget',
+    wpAdded: '✅ Utilisateur ajouté',
+    wpRemoved: '✅ Utilisateur retiré',
+    wpDuplicate: 'Cet email existe déjà pour ce widget',
+    wpUpdated: '✅ Permission mise à jour',
+    wpYou: 'vous',
+    wpHint: 'Les utilisateurs absents de ce tableau suivent leur rôle Grist par défaut.',
+    wpOwnerOnly: 'Réservé au propriétaire (Owner)',
+    wpAllTabs: 'Tous les onglets',
+    wpEmail: 'Email'
   },
   en: {
     title: '🔐 Access Rules Manager',
@@ -277,7 +295,25 @@ var i18n = {
     attrStep2Title: 'Associate users',
     attrStep2Desc: 'Enter emails and values for each user.',
     attrStep3Title: 'Use in rules',
-    attrStep3Desc: 'Go to the <strong>⚙️ Configure</strong> tab and use your attributes in your access rule conditions.'
+    attrStep3Desc: 'Go to the <strong>⚙️ Configure</strong> tab and use your attributes in your access rule conditions.',
+    tabWidgetPerms: '🎛️ Widgets',
+    wpTitle: '🎛️ Widget Permissions',
+    wpSubtitle: 'Define which tabs each user can see in the document widgets',
+    wpSelectWidget: '-- Select a widget --',
+    wpNoWidgets: 'No widgets registered. Widgets register themselves on startup.',
+    wpEmailPlaceholder: 'User email',
+    wpAdd: 'Add',
+    wpRemove: 'Remove',
+    wpNoUsers: 'No users configured for this widget',
+    wpAdded: '✅ User added',
+    wpRemoved: '✅ User removed',
+    wpDuplicate: 'This email already exists for this widget',
+    wpUpdated: '✅ Permission updated',
+    wpYou: 'you',
+    wpHint: 'Users not listed here follow their default Grist role.',
+    wpOwnerOnly: 'Owner only',
+    wpAllTabs: 'All tabs',
+    wpEmail: 'Email'
   }
 };
 
@@ -2701,7 +2737,274 @@ async function initUsersTab() {
   showUsersNoProxy();
 }
 
+// =============================================================================
+// WIDGET PERMISSIONS SYSTEM
+// =============================================================================
+
+var WIDGET_REGISTRY_TABLE = 'Widget_Registry';
+var WIDGET_PERMISSIONS_TABLE = 'Widget_Permissions';
+var wpRegistryData = [];
+var wpPermissionsData = [];
+var wpSelectedWidget = '';
+
+async function ensureWidgetPermsTables() {
+  try {
+    var tables = await grist.docApi.listTables();
+    if (tables.indexOf(WIDGET_REGISTRY_TABLE) === -1) {
+      await grist.docApi.applyUserActions([
+        ['AddTable', WIDGET_REGISTRY_TABLE, [
+          { id: 'WidgetId', type: 'Text' },
+          { id: 'WidgetName', type: 'Text' },
+          { id: 'AvailableTabs', type: 'Text' }
+        ]]
+      ]);
+    }
+    if (tables.indexOf(WIDGET_PERMISSIONS_TABLE) === -1) {
+      await grist.docApi.applyUserActions([
+        ['AddTable', WIDGET_PERMISSIONS_TABLE, [
+          { id: 'Email', type: 'Text' },
+          { id: 'WidgetId', type: 'Text' },
+          { id: 'AllowedTabs', type: 'Text' }
+        ]]
+      ]);
+    }
+  } catch (e) {
+    console.warn('Could not create widget permissions tables:', e.message);
+  }
+}
+
+async function loadWidgetRegistry() {
+  wpRegistryData = [];
+  try {
+    var data = await grist.docApi.fetchTable(WIDGET_REGISTRY_TABLE);
+    if (data && data.id) {
+      for (var i = 0; i < data.id.length; i++) {
+        wpRegistryData.push({
+          id: data.id[i],
+          WidgetId: data.WidgetId[i] || '',
+          WidgetName: data.WidgetName[i] || '',
+          AvailableTabs: data.AvailableTabs[i] || '[]'
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('Could not load widget registry:', e.message);
+  }
+}
+
+async function loadWidgetPermissions() {
+  wpPermissionsData = [];
+  try {
+    var data = await grist.docApi.fetchTable(WIDGET_PERMISSIONS_TABLE);
+    if (data && data.id) {
+      for (var i = 0; i < data.id.length; i++) {
+        wpPermissionsData.push({
+          id: data.id[i],
+          Email: data.Email[i] || '',
+          WidgetId: data.WidgetId[i] || '',
+          AllowedTabs: data.AllowedTabs[i] || ''
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('Could not load widget permissions:', e.message);
+  }
+}
+
+function renderWidgetSelector() {
+  var select = document.getElementById('wp-widget-select');
+  if (!select) return;
+  var html = '<option value="">' + t('wpSelectWidget') + '</option>';
+  for (var i = 0; i < wpRegistryData.length; i++) {
+    var w = wpRegistryData[i];
+    html += '<option value="' + w.WidgetId + '">' + w.WidgetName + ' (' + w.WidgetId + ')</option>';
+  }
+  select.innerHTML = html;
+
+  var noWidgets = document.getElementById('wp-no-widgets');
+  var permsArea = document.getElementById('wp-permissions-area');
+  if (wpRegistryData.length === 0) {
+    noWidgets.classList.remove('hidden');
+    permsArea.classList.add('hidden');
+  } else {
+    noWidgets.classList.add('hidden');
+  }
+}
+
+function getWidgetTabs(widgetId) {
+  for (var i = 0; i < wpRegistryData.length; i++) {
+    if (wpRegistryData[i].WidgetId === widgetId) {
+      try { return JSON.parse(wpRegistryData[i].AvailableTabs); } catch (e) { return []; }
+    }
+  }
+  return [];
+}
+
+function getWidgetPerms(widgetId) {
+  return wpPermissionsData.filter(function(p) { return p.WidgetId === widgetId; });
+}
+
+function renderWidgetPermsTable() {
+  var container = document.getElementById('wp-permissions-table');
+  if (!container || !wpSelectedWidget) { if (container) container.innerHTML = ''; return; }
+
+  var tabs = getWidgetTabs(wpSelectedWidget);
+  var perms = getWidgetPerms(wpSelectedWidget);
+
+  if (perms.length === 0) {
+    container.innerHTML = '<div style="text-align:center; padding:16px; color:#94a3b8;">' + t('wpNoUsers') + '</div>';
+    return;
+  }
+
+  var html = '<table class="matrix-table" style="width:100%;">';
+  html += '<thead><tr>';
+  html += '<th style="text-align:left;">' + t('wpEmail') + '</th>';
+  for (var ti = 0; ti < tabs.length; ti++) {
+    var label = currentLang === 'fr' ? (tabs[ti].label_fr || tabs[ti].id) : (tabs[ti].label_en || tabs[ti].label_fr || tabs[ti].id);
+    html += '<th style="text-align:center; font-size:12px;">' + label;
+    if (tabs[ti].ownerOnly) html += ' <span class="wp-owner-tag">Owner</span>';
+    html += '</th>';
+  }
+  html += '<th style="width:40px;"></th>';
+  html += '</tr></thead><tbody>';
+
+  for (var pi = 0; pi < perms.length; pi++) {
+    var p = perms[pi];
+    var allowedList = p.AllowedTabs.toLowerCase().split(',').map(function(x) { return x.trim(); }).filter(Boolean);
+
+    html += '<tr>';
+    html += '<td class="wp-email-cell">' + escapeHtml(p.Email) + '</td>';
+
+    for (var tj = 0; tj < tabs.length; tj++) {
+      var isChecked = allowedList.indexOf(tabs[tj].id.toLowerCase()) !== -1;
+      html += '<td style="text-align:center;">';
+      html += '<input type="checkbox" class="wp-check" data-pid="' + p.id + '" data-tab="' + tabs[tj].id + '" ' + (isChecked ? 'checked' : '') + ' onchange="wpTogglePermission(' + p.id + ',\'' + tabs[tj].id + '\',this.checked)">';
+      html += '</td>';
+    }
+
+    html += '<td style="text-align:center;"><button class="wp-del-btn" onclick="wpRemoveUser(' + p.id + ')" title="' + t('wpRemove') + '">✕</button></td>';
+    html += '</tr>';
+  }
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function escapeHtml(str) {
+  var div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+async function wpAddUser() {
+  var input = document.getElementById('wp-email-input');
+  var email = (input && input.value || '').trim();
+  if (!email || !wpSelectedWidget) return;
+
+  var existing = getWidgetPerms(wpSelectedWidget);
+  for (var i = 0; i < existing.length; i++) {
+    if (existing[i].Email.toLowerCase().trim() === email.toLowerCase()) {
+      showMessage(t('wpDuplicate'), 'warning');
+      setTimeout(hideMessage, 2000);
+      return;
+    }
+  }
+
+  var tabs = getWidgetTabs(wpSelectedWidget);
+  var defaultTabs = tabs.filter(function(tab) { return !tab.ownerOnly; }).map(function(tab) { return tab.id; });
+
+  try {
+    await grist.docApi.applyUserActions([
+      ['AddRecord', WIDGET_PERMISSIONS_TABLE, null, {
+        Email: email,
+        WidgetId: wpSelectedWidget,
+        AllowedTabs: defaultTabs.join(',')
+      }]
+    ]);
+    input.value = '';
+    showMessage(t('wpAdded'), 'success');
+    setTimeout(hideMessage, 2000);
+    await loadWidgetPermissions();
+    renderWidgetPermsTable();
+  } catch (e) {
+    showMessage('Error: ' + e.message, 'error');
+  }
+}
+
+async function wpRemoveUser(pid) {
+  try {
+    await grist.docApi.applyUserActions([
+      ['RemoveRecord', WIDGET_PERMISSIONS_TABLE, pid]
+    ]);
+    showMessage(t('wpRemoved'), 'success');
+    setTimeout(hideMessage, 2000);
+    await loadWidgetPermissions();
+    renderWidgetPermsTable();
+  } catch (e) {
+    showMessage('Error: ' + e.message, 'error');
+  }
+}
+
+async function wpTogglePermission(pid, tabId, checked) {
+  var perm = null;
+  for (var i = 0; i < wpPermissionsData.length; i++) {
+    if (wpPermissionsData[i].id === pid) { perm = wpPermissionsData[i]; break; }
+  }
+  if (!perm) return;
+
+  var tabs = perm.AllowedTabs.toLowerCase().split(',').map(function(x) { return x.trim(); }).filter(Boolean);
+  var idx = tabs.indexOf(tabId.toLowerCase());
+  if (checked && idx === -1) tabs.push(tabId);
+  if (!checked && idx !== -1) tabs.splice(idx, 1);
+
+  try {
+    await grist.docApi.applyUserActions([
+      ['UpdateRecord', WIDGET_PERMISSIONS_TABLE, pid, { AllowedTabs: tabs.join(',') }]
+    ]);
+    perm.AllowedTabs = tabs.join(',');
+    showMessage(t('wpUpdated'), 'success');
+    setTimeout(hideMessage, 2000);
+  } catch (e) {
+    showMessage('Error: ' + e.message, 'error');
+  }
+}
+
+function setupWidgetPermsListeners() {
+  var select = document.getElementById('wp-widget-select');
+  if (select) {
+    select.addEventListener('change', function() {
+      wpSelectedWidget = this.value;
+      var permsArea = document.getElementById('wp-permissions-area');
+      if (wpSelectedWidget) {
+        permsArea.classList.remove('hidden');
+        renderWidgetPermsTable();
+      } else {
+        permsArea.classList.add('hidden');
+      }
+    });
+  }
+
+  var addBtn = document.getElementById('wp-add-btn');
+  if (addBtn) addBtn.addEventListener('click', wpAddUser);
+
+  var emailInput = document.getElementById('wp-email-input');
+  if (emailInput) {
+    emailInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') wpAddUser();
+    });
+  }
+}
+
+async function initWidgetPermsTab() {
+  await ensureWidgetPermsTables();
+  await loadWidgetRegistry();
+  await loadWidgetPermissions();
+  renderWidgetSelector();
+  setupWidgetPermsListeners();
+}
+
 // Start
 init();
 renderGuide();
 initUsersTab();
+initWidgetPermsTab();
